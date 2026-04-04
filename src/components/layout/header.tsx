@@ -2,12 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Menu, Bell, UserCircle, Droplets, ListChecks, AlertTriangle, X } from "lucide-react";
+import { Menu, Bell, UserCircle, Droplets, ListChecks, AlertTriangle, X, Wrench } from "lucide-react";
 import Link from "next/link";
 
 interface Notification {
   id: string;
-  type: "plant" | "chore" | "inventory";
+  type: "plant" | "chore" | "inventory" | "maintenance";
   text: string;
   href: string;
 }
@@ -74,6 +74,53 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
         }
       });
 
+      const { data: chores } = await supabase
+        .from("chores")
+        .select("id, title, frequency, assigned_to, chore_completions(completed_at)")
+        .eq("household_id", hhId)
+        .eq("assigned_to", user.id);
+
+      const now = new Date();
+      chores?.forEach((chore: any) => {
+        const completions = chore.chore_completions || [];
+        const lastDone = completions.length > 0
+          ? new Date(Math.max(...completions.map((c: any) => new Date(c.completed_at).getTime())))
+          : null;
+
+        let pending = !lastDone;
+        if (lastDone) {
+          const hours = (now.getTime() - lastDone.getTime()) / (1000 * 60 * 60);
+          const limits: Record<string, number> = {
+            daily: 20, weekly: 144, biweekly: 288, monthly: 600,
+          };
+          if (limits[chore.frequency] && hours >= limits[chore.frequency]) pending = true;
+        }
+
+        if (pending) {
+          items.push({
+            id: `chore-${chore.id}`,
+            type: "chore",
+            text: `${chore.title} — משויך אליך`,
+            href: "/chores",
+          });
+        }
+      });
+
+      const { data: maintenance } = await supabase
+        .from("maintenance_items")
+        .select("id, title, next_due")
+        .eq("household_id", hhId)
+        .lte("next_due", today);
+
+      maintenance?.forEach((item) => {
+        items.push({
+          id: `maint-${item.id}`,
+          type: "maintenance",
+          text: `${item.title} — באיחור`,
+          href: "/maintenance",
+        });
+      });
+
       setNotifications(items);
     }
 
@@ -84,12 +131,14 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
     plant: Droplets,
     chore: ListChecks,
     inventory: AlertTriangle,
+    maintenance: Wrench,
   };
 
   const colorMap = {
     plant: "text-green-600 bg-green-100",
     chore: "text-amber-600 bg-amber-100",
     inventory: "text-red-600 bg-red-100",
+    maintenance: "text-purple-600 bg-purple-100",
   };
 
   return (
