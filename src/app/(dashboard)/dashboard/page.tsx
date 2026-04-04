@@ -10,8 +10,8 @@ import {
   Sprout,
   ListChecks,
   Droplets,
-  TrendingUp,
   BarChart3,
+  StickyNote,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -37,8 +37,57 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!household) return;
-    loadDashboard();
+    processRecurring().then(() => loadDashboard());
   }, [household]);
+
+  async function processRecurring() {
+    if (!household || !userId) return;
+    const now = new Date();
+    const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const startOfMonth = `${thisMonth}-01`;
+
+    const { data: recurring } = await supabase
+      .from("expenses")
+      .select("*")
+      .eq("household_id", household.id)
+      .eq("is_recurring", true);
+
+    if (!recurring) return;
+
+    for (const exp of recurring) {
+      const { count } = await supabase
+        .from("expenses")
+        .select("id", { count: "exact", head: true })
+        .eq("household_id", household.id)
+        .eq("title", exp.title)
+        .eq("is_recurring", true)
+        .gte("date", startOfMonth);
+
+      if (count && count > 0) continue;
+
+      const lastDate = new Date(exp.date);
+      const monthsDiff = (now.getFullYear() - lastDate.getFullYear()) * 12 + now.getMonth() - lastDate.getMonth();
+      let shouldCreate = false;
+
+      if (exp.recurring_interval === "monthly" && monthsDiff >= 1) shouldCreate = true;
+      else if (exp.recurring_interval === "quarterly" && monthsDiff >= 3) shouldCreate = true;
+      else if (exp.recurring_interval === "yearly" && monthsDiff >= 12) shouldCreate = true;
+
+      if (shouldCreate) {
+        await supabase.from("expenses").insert({
+          household_id: household.id,
+          title: exp.title,
+          amount: exp.amount,
+          category_id: exp.category_id,
+          date: `${thisMonth}-01`,
+          notes: exp.notes,
+          is_recurring: true,
+          recurring_interval: exp.recurring_interval,
+          added_by: exp.added_by,
+        });
+      }
+    }
+  }
 
   async function loadDashboard() {
     setLoading(true);
@@ -287,6 +336,7 @@ export default function DashboardPage() {
             { label: "הוצאה חדשה", href: "/expenses", icon: Wallet, color: "bg-indigo-100 text-indigo-600" },
             { label: "פריט לקניות", href: "/shopping", icon: ShoppingCart, color: "bg-emerald-100 text-emerald-600" },
             { label: "צמח חדש", href: "/plants", icon: Sprout, color: "bg-green-100 text-green-600" },
+            { label: "הודעה חדשה", href: "/notes", icon: StickyNote, color: "bg-purple-100 text-purple-600" },
           ].map((action) => {
             const Icon = action.icon;
             return (
@@ -393,9 +443,7 @@ export default function DashboardPage() {
                     </div>
                     <div>
                       <p className="text-sm font-medium">{plant.name}</p>
-                      <p className="text-xs text-muted">
-                        {plant.location || ""}
-                      </p>
+                      <p className="text-xs text-muted">{plant.location || ""}</p>
                     </div>
                   </div>
                   <button
@@ -419,6 +467,7 @@ export default function DashboardPage() {
               { label: "הוצאה חדשה", href: "/expenses", icon: Wallet, color: "bg-indigo-100 text-indigo-600" },
               { label: "פריט לקניות", href: "/shopping", icon: ShoppingCart, color: "bg-emerald-100 text-emerald-600" },
               { label: "צמח חדש", href: "/plants", icon: Sprout, color: "bg-green-100 text-green-600" },
+              { label: "הודעה חדשה", href: "/notes", icon: StickyNote, color: "bg-purple-100 text-purple-600" },
             ].map((action) => {
               const Icon = action.icon;
               return (

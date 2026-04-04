@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useHousehold } from "@/hooks/use-household";
+import { useTheme } from "@/hooks/use-theme";
 import { LoadingScreen } from "@/components/ui/loading";
 import {
   Copy,
@@ -14,11 +15,14 @@ import {
   Pencil,
   Loader2,
   Save,
+  Moon,
+  Sun,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 export default function SettingsPage() {
   const { household, user, userId, loading: hhLoading } = useHousehold();
+  const { dark, toggle } = useTheme();
   const [members, setMembers] = useState<{ user_id: string; name: string; role: string }[]>([]);
   const [copied, setCopied] = useState(false);
   const [editingName, setEditingName] = useState(false);
@@ -81,6 +85,32 @@ export default function SettingsPage() {
       <div>
         <h1 className="text-2xl font-bold">הגדרות</h1>
         <p className="text-muted">ניהול משק הבית והחשבון</p>
+      </div>
+
+      {/* Appearance */}
+      <div className="rounded-2xl border bg-surface p-5">
+        <h2 className="mb-4 font-bold">תצוגה</h2>
+        <div className="flex items-center justify-between rounded-xl bg-background p-4">
+          <div className="flex items-center gap-3">
+            {dark ? <Moon className="h-5 w-5 text-indigo-400" /> : <Sun className="h-5 w-5 text-amber-500" />}
+            <div>
+              <p className="text-sm font-medium">{dark ? "מצב כהה" : "מצב בהיר"}</p>
+              <p className="text-xs text-muted">החליפו בין ערכות נושא</p>
+            </div>
+          </div>
+          <button
+            onClick={toggle}
+            className={`relative h-7 w-12 rounded-full transition-colors ${
+              dark ? "bg-primary" : "bg-border"
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow-sm transition-all ${
+                dark ? "left-0.5" : "left-[22px]"
+              }`}
+            />
+          </button>
+        </div>
       </div>
 
       {/* Household Info */}

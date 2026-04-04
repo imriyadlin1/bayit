@@ -1,34 +1,47 @@
 @import "tailwindcss";
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-background: var(--bg);
+  --color-foreground: var(--fg);
   --color-primary: #0d9488;
   --color-primary-light: #14b8a6;
   --color-primary-dark: #0f766e;
   --color-accent: #f59e0b;
   --color-accent-light: #fbbf24;
-  --color-surface: #ffffff;
-  --color-surface-dim: #f5f5f4;
-  --color-muted: #78716c;
-  --color-border: #e7e5e4;
+  --color-surface: var(--surface);
+  --color-surface-dim: var(--surface-dim);
+  --color-muted: var(--text-muted);
+  --color-border: var(--border-clr);
   --color-danger: #ef4444;
   --color-success: #10b981;
   --font-sans: var(--font-heebo);
 }
 
 :root {
-  --background: #fafaf9;
-  --foreground: #1c1917;
+  --bg: #fafaf9;
+  --fg: #1c1917;
+  --surface: #ffffff;
+  --surface-dim: #f5f5f4;
+  --text-muted: #78716c;
+  --border-clr: #e7e5e4;
+}
+
+.dark {
+  --bg: #0c0c0c;
+  --fg: #e5e5e5;
+  --surface: #171717;
+  --surface-dim: #262626;
+  --text-muted: #a3a3a3;
+  --border-clr: #333333;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--bg);
+  color: var(--fg);
 }
 
 * {
-  border-color: var(--color-border);
+  border-color: var(--border-clr);
 }
 
 input,

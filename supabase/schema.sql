@@ -105,10 +105,33 @@ CREATE TABLE expenses (
   amount DECIMAL(10,2) NOT NULL,
   date DATE NOT NULL DEFAULT CURRENT_DATE,
   notes TEXT,
+  receipt_url TEXT,
   is_recurring BOOLEAN DEFAULT FALSE,
   recurring_interval TEXT CHECK (recurring_interval IN ('monthly', 'quarterly', 'yearly')),
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Budgets (monthly per category)
+CREATE TABLE budgets (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  household_id UUID REFERENCES households(id) ON DELETE CASCADE,
+  category_id UUID REFERENCES expense_categories(id),
+  amount DECIMAL(10,2) NOT NULL,
+  month TEXT NOT NULL,
+  created_by UUID REFERENCES profiles(id),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(household_id, category_id, month)
+);
+
+-- Expense Splits (who owes what)
+CREATE TABLE expense_splits (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  expense_id UUID REFERENCES expenses(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES profiles(id),
+  amount DECIMAL(10,2) NOT NULL,
+  is_paid BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Shopping Lists
@@ -224,6 +247,19 @@ CREATE TABLE maintenance_items (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Household Notes / Message Board
+CREATE TABLE household_notes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  household_id UUID REFERENCES households(id) ON DELETE CASCADE,
+  title TEXT,
+  content TEXT NOT NULL,
+  color TEXT,
+  pinned BOOLEAN DEFAULT FALSE,
+  created_by UUID REFERENCES profiles(id),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ===========================================
 -- Row Level Security (RLS)
 -- ===========================================
@@ -233,6 +269,8 @@ ALTER TABLE households ENABLE ROW LEVEL SECURITY;
 ALTER TABLE household_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE expense_categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE expenses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE budgets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE expense_splits ENABLE ROW LEVEL SECURITY;
 ALTER TABLE shopping_lists ENABLE ROW LEVEL SECURITY;
 ALTER TABLE shopping_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE inventory_items ENABLE ROW LEVEL SECURITY;
@@ -241,6 +279,7 @@ ALTER TABLE plant_care_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE chores ENABLE ROW LEVEL SECURITY;
 ALTER TABLE chore_completions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE maintenance_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE household_notes ENABLE ROW LEVEL SECURITY;
 
 -- Helper: check if user is in a household
 CREATE OR REPLACE FUNCTION is_household_member(h_id UUID)
@@ -305,14 +344,13 @@ CREATE POLICY "Admins can manage members" ON household_members
   );
 
 -- Macro policy for household-scoped tables
--- Expenses, Shopping, Inventory, Plants, Chores, Maintenance
 DO $$
 DECLARE
   tbl TEXT;
 BEGIN
   FOREACH tbl IN ARRAY ARRAY[
-    'expense_categories', 'expenses', 'shopping_lists',
-    'inventory_items', 'plants', 'chores', 'maintenance_items'
+    'expense_categories', 'expenses', 'budgets', 'shopping_lists',
+    'inventory_items', 'plants', 'chores', 'maintenance_items', 'household_notes'
   ] LOOP
     EXECUTE format(
       'CREATE POLICY "Members can view %1$s" ON %1$s FOR SELECT USING (is_household_member(household_id))',
@@ -381,6 +419,22 @@ CREATE POLICY "Members can manage completions" ON chore_completions
     )
   );
 
+-- Expense splits: access through expense's household
+CREATE POLICY "Members can view splits" ON expense_splits
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM expenses e
+      WHERE e.id = expense_splits.expense_id AND is_household_member(e.household_id)
+    )
+  );
+CREATE POLICY "Members can manage splits" ON expense_splits
+  FOR ALL USING (
+    EXISTS (
+      SELECT 1 FROM expenses e
+      WHERE e.id = expense_splits.expense_id AND is_household_member(e.household_id)
+    )
+  );
+
 -- ===========================================
 -- RPC Functions
 -- ===========================================
@@ -432,6 +486,8 @@ CREATE INDEX idx_household_members_household ON household_members(household_id);
 CREATE INDEX idx_expenses_household ON expenses(household_id);
 CREATE INDEX idx_expenses_date ON expenses(date);
 CREATE INDEX idx_expenses_category ON expenses(category_id);
+CREATE INDEX idx_budgets_household_month ON budgets(household_id, month);
+CREATE INDEX idx_expense_splits_expense ON expense_splits(expense_id);
 CREATE INDEX idx_shopping_items_list ON shopping_items(list_id);
 CREATE INDEX idx_inventory_household ON inventory_items(household_id);
 CREATE INDEX idx_plants_household ON plants(household_id);
@@ -439,3 +495,4 @@ CREATE INDEX idx_plants_next_watering ON plants(next_watering);
 CREATE INDEX idx_chores_household ON chores(household_id);
 CREATE INDEX idx_maintenance_household ON maintenance_items(household_id);
 CREATE INDEX idx_maintenance_next_due ON maintenance_items(next_due);
+CREATE INDEX idx_household_notes_household ON household_notes(household_id);

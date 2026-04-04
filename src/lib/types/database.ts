@@ -44,10 +44,30 @@ export interface Expense {
   amount: number;
   date: string;
   notes: string | null;
+  receipt_url: string | null;
   is_recurring: boolean;
   recurring_interval: "monthly" | "quarterly" | "yearly" | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface Budget {
+  id: string;
+  household_id: string;
+  category_id: string | null;
+  amount: number;
+  month: string;
+  created_by: string;
+  created_at: string;
+}
+
+export interface ExpenseSplit {
+  id: string;
+  expense_id: string;
+  user_id: string;
+  amount: number;
+  is_paid: boolean;
+  created_at: string;
 }
 
 export interface ShoppingList {
@@ -150,6 +170,18 @@ export interface MaintenanceItem {
   service_phone: string | null;
   cost: number | null;
   notes: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HouseholdNote {
+  id: string;
+  household_id: string;
+  title: string | null;
+  content: string;
+  color: string | null;
+  pinned: boolean;
   created_by: string;
   created_at: string;
   updated_at: string;

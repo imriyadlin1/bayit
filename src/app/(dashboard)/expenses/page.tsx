@@ -8,30 +8,34 @@ import {
   Plus,
   X,
   Wallet,
-  TrendingUp,
-  TrendingDown,
   Filter,
   ChevronRight,
   ChevronLeft,
   Loader2,
   Trash2,
   Download,
+  Target,
+  PieChart,
+  Users,
+  Check,
 } from "lucide-react";
-import type { Expense, ExpenseCategory } from "@/lib/types/database";
+import type { Expense, ExpenseCategory, Budget } from "@/lib/types/database";
 
 export default function ExpensesPage() {
   const { household, userId, loading: hhLoading } = useHousehold();
-  const [expenses, setExpenses] = useState<(Expense & { category?: ExpenseCategory })[]>([]);
+  const [expenses, setExpenses] = useState<(Expense & { category?: ExpenseCategory; added_by_name?: string })[]>([]);
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
+  const [budgets, setBudgets] = useState<Budget[]>([]);
+  const [members, setMembers] = useState<{ user_id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [showBudgetForm, setShowBudgetForm] = useState(false);
   const [filterCat, setFilterCat] = useState<string>("all");
   const [currentMonth, setCurrentMonth] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   });
 
-  // Form state
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
   const [categoryId, setCategoryId] = useState("");
@@ -39,7 +43,13 @@ export default function ExpensesPage() {
   const [notes, setNotes] = useState("");
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurringInterval, setRecurringInterval] = useState("monthly");
+  const [splitEnabled, setSplitEnabled] = useState(false);
+  const [splitMembers, setSplitMembers] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+
+  const [budgetCatId, setBudgetCatId] = useState("");
+  const [budgetAmount, setBudgetAmount] = useState("");
+  const [savingBudget, setSavingBudget] = useState(false);
 
   const supabase = createClient();
 
@@ -57,12 +67,20 @@ export default function ExpensesPage() {
         ? `${year + 1}-01-01`
         : `${year}-${String(month + 1).padStart(2, "0")}-01`;
 
-    const { data: cats } = await supabase
-      .from("expense_categories")
-      .select("*")
-      .eq("household_id", household!.id);
+    const [catsRes, memberRes, budgetRes] = await Promise.all([
+      supabase.from("expense_categories").select("*").eq("household_id", household!.id),
+      supabase.from("household_members").select("user_id, profiles(full_name)").eq("household_id", household!.id),
+      supabase.from("budgets").select("*").eq("household_id", household!.id).eq("month", currentMonth),
+    ]);
 
-    if (cats) setCategories(cats as ExpenseCategory[]);
+    if (catsRes.data) setCategories(catsRes.data as ExpenseCategory[]);
+    if (budgetRes.data) setBudgets(budgetRes.data as Budget[]);
+
+    const memberList = memberRes.data?.map((m: any) => ({
+      user_id: m.user_id,
+      name: m.profiles?.full_name || "ללא שם",
+    })) || [];
+    setMembers(memberList);
 
     let query = supabase
       .from("expenses")
@@ -78,8 +96,14 @@ export default function ExpensesPage() {
 
     const { data } = await query;
     if (data) {
+      const memberMap: Record<string, string> = {};
+      memberList.forEach((m) => { memberMap[m.user_id] = m.name; });
       setExpenses(
-        data.map((e: any) => ({ ...e, category: e.expense_categories }))
+        data.map((e: any) => ({
+          ...e,
+          category: e.expense_categories,
+          added_by_name: memberMap[e.added_by] || "",
+        }))
       );
     }
     setLoading(false);
@@ -90,7 +114,7 @@ export default function ExpensesPage() {
     if (!household || !userId) return;
     setSaving(true);
 
-    await supabase.from("expenses").insert({
+    const { data: newExpense } = await supabase.from("expenses").insert({
       household_id: household.id,
       title,
       amount: parseFloat(amount),
@@ -100,7 +124,18 @@ export default function ExpensesPage() {
       is_recurring: isRecurring,
       recurring_interval: isRecurring ? recurringInterval : null,
       added_by: userId,
-    });
+    }).select().single();
+
+    if (splitEnabled && splitMembers.length > 0 && newExpense) {
+      const splitAmount = parseFloat(amount) / (splitMembers.length + 1);
+      const splits = splitMembers.map((uid) => ({
+        expense_id: newExpense.id,
+        user_id: uid,
+        amount: Math.round(splitAmount * 100) / 100,
+        is_paid: false,
+      }));
+      await supabase.from("expense_splits").insert(splits);
+    }
 
     setTitle("");
     setAmount("");
@@ -108,6 +143,8 @@ export default function ExpensesPage() {
     setDate(new Date().toISOString().split("T")[0]);
     setNotes("");
     setIsRecurring(false);
+    setSplitEnabled(false);
+    setSplitMembers([]);
     setShowForm(false);
     setSaving(false);
     loadData();
@@ -116,6 +153,31 @@ export default function ExpensesPage() {
   async function handleDelete(id: string) {
     await supabase.from("expenses").delete().eq("id", id);
     setExpenses((prev) => prev.filter((e) => e.id !== id));
+  }
+
+  async function handleSaveBudget(e: React.FormEvent) {
+    e.preventDefault();
+    if (!household || !userId) return;
+    setSavingBudget(true);
+
+    const existing = budgets.find((b) => b.category_id === (budgetCatId || null));
+    if (existing) {
+      await supabase.from("budgets").update({ amount: parseFloat(budgetAmount) }).eq("id", existing.id);
+    } else {
+      await supabase.from("budgets").insert({
+        household_id: household.id,
+        category_id: budgetCatId || null,
+        amount: parseFloat(budgetAmount),
+        month: currentMonth,
+        created_by: userId,
+      });
+    }
+
+    setBudgetCatId("");
+    setBudgetAmount("");
+    setShowBudgetForm(false);
+    setSavingBudget(false);
+    loadData();
   }
 
   function exportCSV() {
@@ -144,6 +206,7 @@ export default function ExpensesPage() {
   }
 
   const totalMonth = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
+  const totalBudget = budgets.reduce((sum, b) => sum + Number(b.amount), 0);
 
   const [year, month] = currentMonth.split("-").map(Number);
   const monthName = new Date(year, month - 1).toLocaleDateString("he-IL", {
@@ -163,6 +226,39 @@ export default function ExpensesPage() {
     setCurrentMonth(
       `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
     );
+  }
+
+  const catBreakdown = categories
+    .map((cat) => {
+      const catTotal = expenses
+        .filter((e) => e.category_id === cat.id)
+        .reduce((sum, e) => sum + Number(e.amount), 0);
+      const budget = budgets.find((b) => b.category_id === cat.id);
+      return { ...cat, total: catTotal, budget: budget ? Number(budget.amount) : null };
+    })
+    .filter((c) => c.total > 0 || c.budget)
+    .sort((a, b) => b.total - a.total);
+
+  // Pie chart data
+  const pieData = catBreakdown.filter((c) => c.total > 0);
+  let pieAngle = 0;
+  const pieSlices = pieData.map((cat) => {
+    const pct = totalMonth > 0 ? (cat.total / totalMonth) * 100 : 0;
+    const startAngle = pieAngle;
+    pieAngle += (pct / 100) * 360;
+    return { ...cat, pct, startAngle, endAngle: pieAngle };
+  });
+
+  function pieArc(startAngle: number, endAngle: number, r: number) {
+    if (endAngle - startAngle >= 359.99) {
+      return `M ${r} 0 A ${r} ${r} 0 1 1 ${r * Math.cos(Math.PI * 359.99 / 180)} ${r * Math.sin(Math.PI * 359.99 / 180)} A ${r} ${r} 0 0 1 ${r} 0`;
+    }
+    const s = (Math.PI / 180) * (startAngle - 90);
+    const e = (Math.PI / 180) * (endAngle - 90);
+    const x1 = r * Math.cos(s), y1 = r * Math.sin(s);
+    const x2 = r * Math.cos(e), y2 = r * Math.sin(e);
+    const large = endAngle - startAngle > 180 ? 1 : 0;
+    return `M 0 0 L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z`;
   }
 
   if (hhLoading) return <LoadingScreen />;
@@ -186,6 +282,13 @@ export default function ExpensesPage() {
             </button>
           )}
           <button
+            onClick={() => setShowBudgetForm(true)}
+            className="flex items-center gap-2 rounded-xl border border-primary/20 bg-primary/5 px-4 py-2.5 text-sm font-medium text-primary hover:bg-primary/10 transition-colors"
+          >
+            <Target className="h-4 w-4" />
+            תקציב
+          </button>
+          <button
             onClick={() => setShowForm(true)}
             className="flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark transition-colors"
           >
@@ -195,7 +298,7 @@ export default function ExpensesPage() {
         </div>
       </div>
 
-      {/* Month Navigation + Total */}
+      {/* Month Navigation + Total + Budget */}
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border bg-surface p-5">
         <div className="flex items-center gap-3">
           <button onClick={prevMonth} className="rounded-lg p-1.5 hover:bg-surface-dim">
@@ -209,6 +312,24 @@ export default function ExpensesPage() {
         <div className="text-left">
           <p className="text-sm text-muted">סה״כ החודש</p>
           <p className="text-2xl font-bold">₪{totalMonth.toLocaleString()}</p>
+          {totalBudget > 0 && (
+            <div className="mt-1">
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-muted">מתוך תקציב ₪{totalBudget.toLocaleString()}</span>
+                <span className={totalMonth > totalBudget ? "text-danger font-medium" : "text-success font-medium"}>
+                  {totalMonth > totalBudget ? "חריגה!" : `נותרו ₪${(totalBudget - totalMonth).toLocaleString()}`}
+                </span>
+              </div>
+              <div className="mt-1 h-2 w-40 rounded-full bg-surface-dim">
+                <div
+                  className={`h-2 rounded-full transition-all ${
+                    totalMonth > totalBudget ? "bg-danger" : totalMonth > totalBudget * 0.8 ? "bg-accent" : "bg-success"
+                  }`}
+                  style={{ width: `${Math.min((totalMonth / totalBudget) * 100, 100)}%` }}
+                />
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -218,9 +339,7 @@ export default function ExpensesPage() {
         <button
           onClick={() => setFilterCat("all")}
           className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-            filterCat === "all"
-              ? "bg-primary text-white"
-              : "bg-surface-dim hover:bg-border"
+            filterCat === "all" ? "bg-primary text-white" : "bg-surface-dim hover:bg-border"
           }`}
         >
           הכל
@@ -230,9 +349,7 @@ export default function ExpensesPage() {
             key={cat.id}
             onClick={() => setFilterCat(cat.id)}
             className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-              filterCat === cat.id
-                ? "bg-primary text-white"
-                : "bg-surface-dim hover:bg-border"
+              filterCat === cat.id ? "bg-primary text-white" : "bg-surface-dim hover:bg-border"
             }`}
           >
             {cat.name}
@@ -247,9 +364,7 @@ export default function ExpensesPage() {
         <div className="rounded-2xl border bg-surface p-12 text-center">
           <Wallet className="mx-auto mb-3 h-10 w-10 text-muted" />
           <p className="font-medium">אין הוצאות החודש</p>
-          <p className="mt-1 text-sm text-muted">
-            לחצו על ״הוצאה חדשה״ להוסיף
-          </p>
+          <p className="mt-1 text-sm text-muted">לחצו על ״הוצאה חדשה״ להוסיף</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -261,9 +376,7 @@ export default function ExpensesPage() {
               <div className="flex items-center gap-3">
                 <div
                   className="h-3 w-3 rounded-full"
-                  style={{
-                    backgroundColor: expense.category?.color || "#737373",
-                  }}
+                  style={{ backgroundColor: expense.category?.color || "#737373" }}
                 />
                 <div>
                   <p className="font-medium">{expense.title}</p>
@@ -271,6 +384,7 @@ export default function ExpensesPage() {
                     {expense.category?.name || "ללא קטגוריה"} ·{" "}
                     {new Date(expense.date).toLocaleDateString("he-IL")}
                     {expense.is_recurring && " · חוזר"}
+                    {expense.added_by_name && ` · ${expense.added_by_name}`}
                   </p>
                 </div>
               </div>
@@ -290,43 +404,81 @@ export default function ExpensesPage() {
         </div>
       )}
 
-      {/* Category Breakdown */}
+      {/* Pie Chart + Category Breakdown */}
       {expenses.length > 0 && (
-        <div className="rounded-2xl border bg-surface p-5">
-          <h2 className="mb-4 font-bold">פילוח לפי קטגוריה</h2>
-          <div className="space-y-3">
-            {categories
-              .map((cat) => {
-                const catTotal = expenses
-                  .filter((e) => e.category_id === cat.id)
-                  .reduce((sum, e) => sum + Number(e.amount), 0);
-                return { ...cat, total: catTotal };
-              })
-              .filter((c) => c.total > 0)
-              .sort((a, b) => b.total - a.total)
-              .map((cat) => (
-                <div key={cat.id} className="flex items-center gap-3">
-                  <div
-                    className="h-3 w-3 shrink-0 rounded-full"
-                    style={{ backgroundColor: cat.color || "#737373" }}
-                  />
-                  <span className="flex-1 text-sm">{cat.name}</span>
-                  <span className="text-sm font-semibold">
-                    ₪{cat.total.toLocaleString()}
-                  </span>
-                  <div className="w-24">
-                    <div className="h-2 rounded-full bg-surface-dim">
-                      <div
-                        className="h-2 rounded-full"
-                        style={{
-                          backgroundColor: cat.color || "#737373",
-                          width: `${Math.min((cat.total / totalMonth) * 100, 100)}%`,
-                        }}
-                      />
-                    </div>
+        <div className="grid gap-6 lg:grid-cols-2">
+          {/* Pie Chart */}
+          {pieSlices.length > 0 && (
+            <div className="rounded-2xl border bg-surface p-5">
+              <div className="mb-4 flex items-center gap-2">
+                <PieChart className="h-5 w-5 text-muted" />
+                <h2 className="font-bold">פילוח הוצאות</h2>
+              </div>
+              <div className="flex items-center justify-center">
+                <svg viewBox="-60 -60 120 120" className="h-48 w-48">
+                  {pieSlices.map((slice, i) => (
+                    <path
+                      key={i}
+                      d={pieArc(slice.startAngle, slice.endAngle, 50)}
+                      fill={slice.color || "#737373"}
+                      stroke="var(--surface)"
+                      strokeWidth="1"
+                    />
+                  ))}
+                </svg>
+              </div>
+              <div className="mt-4 flex flex-wrap justify-center gap-3">
+                {pieSlices.map((slice, i) => (
+                  <div key={i} className="flex items-center gap-1.5 text-xs">
+                    <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: slice.color || "#737373" }} />
+                    <span>{slice.name}</span>
+                    <span className="text-muted">{Math.round(slice.pct)}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Category Breakdown with Budgets */}
+          <div className="rounded-2xl border bg-surface p-5">
+            <div className="mb-4 flex items-center gap-2">
+              <Target className="h-5 w-5 text-muted" />
+              <h2 className="font-bold">קטגוריות ותקציב</h2>
+            </div>
+            <div className="space-y-3">
+              {catBreakdown.map((cat) => (
+                <div key={cat.id}>
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="h-3 w-3 shrink-0 rounded-full"
+                      style={{ backgroundColor: cat.color || "#737373" }}
+                    />
+                    <span className="flex-1 text-sm">{cat.name}</span>
+                    <span className="text-sm font-semibold">
+                      ₪{cat.total.toLocaleString()}
+                    </span>
+                    {cat.budget && (
+                      <span className="text-xs text-muted">/ ₪{cat.budget.toLocaleString()}</span>
+                    )}
+                  </div>
+                  <div className="mt-1 mr-6 h-2 rounded-full bg-surface-dim">
+                    <div
+                      className={`h-2 rounded-full transition-all ${
+                        cat.budget && cat.total > cat.budget
+                          ? "bg-danger"
+                          : ""
+                      }`}
+                      style={{
+                        backgroundColor: cat.budget && cat.total > cat.budget ? undefined : (cat.color || "#737373"),
+                        width: cat.budget
+                          ? `${Math.min((cat.total / cat.budget) * 100, 100)}%`
+                          : `${Math.min((cat.total / totalMonth) * 100, 100)}%`,
+                      }}
+                    />
                   </div>
                 </div>
               ))}
+            </div>
           </div>
         </div>
       )}
@@ -334,22 +486,17 @@ export default function ExpensesPage() {
       {/* Add Expense Modal */}
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-surface p-6 shadow-xl">
+          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-surface p-6 shadow-xl">
             <div className="mb-5 flex items-center justify-between">
               <h2 className="text-lg font-bold">הוצאה חדשה</h2>
-              <button
-                onClick={() => setShowForm(false)}
-                className="rounded-lg p-1.5 hover:bg-surface-dim"
-              >
+              <button onClick={() => setShowForm(false)} className="rounded-lg p-1.5 hover:bg-surface-dim">
                 <X className="h-5 w-5" />
               </button>
             </div>
 
             <form onSubmit={handleAdd} className="space-y-4">
               <div>
-                <label className="mb-1.5 block text-sm font-medium">
-                  תיאור
-                </label>
+                <label className="mb-1.5 block text-sm font-medium">תיאור</label>
                 <input
                   type="text"
                   value={title}
@@ -362,9 +509,7 @@ export default function ExpensesPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium">
-                    סכום (₪)
-                  </label>
+                  <label className="mb-1.5 block text-sm font-medium">סכום (₪)</label>
                   <input
                     type="number"
                     value={amount}
@@ -378,9 +523,7 @@ export default function ExpensesPage() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium">
-                    תאריך
-                  </label>
+                  <label className="mb-1.5 block text-sm font-medium">תאריך</label>
                   <input
                     type="date"
                     value={date}
@@ -392,9 +535,7 @@ export default function ExpensesPage() {
               </div>
 
               <div>
-                <label className="mb-1.5 block text-sm font-medium">
-                  קטגוריה
-                </label>
+                <label className="mb-1.5 block text-sm font-medium">קטגוריה</label>
                 <select
                   value={categoryId}
                   onChange={(e) => setCategoryId(e.target.value)}
@@ -402,17 +543,13 @@ export default function ExpensesPage() {
                 >
                   <option value="">בחרו קטגוריה</option>
                   {categories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </option>
+                    <option key={cat.id} value={cat.id}>{cat.name}</option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <label className="mb-1.5 block text-sm font-medium">
-                  הערות
-                </label>
+                <label className="mb-1.5 block text-sm font-medium">הערות</label>
                 <input
                   type="text"
                   value={notes}
@@ -444,6 +581,49 @@ export default function ExpensesPage() {
                 </select>
               )}
 
+              {/* Split expense */}
+              {members.length > 1 && (
+                <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 p-4 dark:border-indigo-800 dark:bg-indigo-950/30">
+                  <label className="flex items-center gap-2 text-sm font-medium">
+                    <input
+                      type="checkbox"
+                      checked={splitEnabled}
+                      onChange={(e) => setSplitEnabled(e.target.checked)}
+                      className="h-4 w-4 rounded border-border accent-primary"
+                    />
+                    <Users className="h-4 w-4 text-indigo-500" />
+                    פיצול הוצאה בין חברי הבית
+                  </label>
+                  {splitEnabled && (
+                    <div className="mt-3 space-y-2">
+                      <p className="text-xs text-muted">בחרו עם מי לפצל (אתם כלולים אוטומטית):</p>
+                      {members.filter((m) => m.user_id !== userId).map((m) => (
+                        <label key={m.user_id} className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={splitMembers.includes(m.user_id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSplitMembers((prev) => [...prev, m.user_id]);
+                              } else {
+                                setSplitMembers((prev) => prev.filter((id) => id !== m.user_id));
+                              }
+                            }}
+                            className="h-4 w-4 rounded border-border accent-primary"
+                          />
+                          {m.name}
+                        </label>
+                      ))}
+                      {splitMembers.length > 0 && amount && (
+                        <p className="text-xs font-medium text-primary">
+                          ₪{(parseFloat(amount) / (splitMembers.length + 1)).toFixed(0)} לכל אחד
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <button
                 type="submit"
                 disabled={saving}
@@ -451,6 +631,74 @@ export default function ExpensesPage() {
               >
                 {saving && <Loader2 className="h-4 w-4 animate-spin" />}
                 {saving ? "שומר..." : "הוספת הוצאה"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Budget Modal */}
+      {showBudgetForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-surface p-6 shadow-xl">
+            <div className="mb-5 flex items-center justify-between">
+              <h2 className="text-lg font-bold">הגדרת תקציב - {monthName}</h2>
+              <button onClick={() => setShowBudgetForm(false)} className="rounded-lg p-1.5 hover:bg-surface-dim">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {budgets.length > 0 && (
+              <div className="mb-4 space-y-2">
+                <p className="text-sm font-medium text-muted">תקציבים קיימים:</p>
+                {budgets.map((b) => {
+                  const cat = categories.find((c) => c.id === b.category_id);
+                  return (
+                    <div key={b.id} className="flex items-center justify-between rounded-lg bg-background p-2 text-sm">
+                      <span>{cat?.name || "כללי"}</span>
+                      <span className="font-semibold">₪{Number(b.amount).toLocaleString()}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <form onSubmit={handleSaveBudget} className="space-y-4">
+              <div>
+                <label className="mb-1.5 block text-sm font-medium">קטגוריה</label>
+                <select
+                  value={budgetCatId}
+                  onChange={(e) => setBudgetCatId(e.target.value)}
+                  className="w-full rounded-xl border bg-background py-3 px-4 text-sm"
+                >
+                  <option value="">כללי (כל ההוצאות)</option>
+                  {categories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-sm font-medium">סכום תקציב (₪)</label>
+                <input
+                  type="number"
+                  value={budgetAmount}
+                  onChange={(e) => setBudgetAmount(e.target.value)}
+                  placeholder="5000"
+                  className="w-full rounded-xl border bg-background py-3 px-4 text-sm"
+                  required
+                  min="0"
+                  dir="ltr"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={savingBudget}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-semibold text-white hover:bg-primary-dark disabled:opacity-60"
+              >
+                {savingBudget && <Loader2 className="h-4 w-4 animate-spin" />}
+                {savingBudget ? "שומר..." : "שמירת תקציב"}
               </button>
             </form>
           </div>

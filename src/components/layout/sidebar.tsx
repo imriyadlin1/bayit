@@ -12,6 +12,7 @@ import {
   Sprout,
   ListChecks,
   Wrench,
+  StickyNote,
   Settings,
   Home,
   X,
@@ -26,6 +27,7 @@ const navItems = [
   { href: "/plants", label: "צמחים", icon: Sprout },
   { href: "/chores", label: "מטלות", icon: ListChecks },
   { href: "/maintenance", label: "תחזוקה", icon: Wrench },
+  { href: "/notes", label: "לוח הודעות", icon: StickyNote },
   { href: "/settings", label: "הגדרות", icon: Settings },
 ];
 

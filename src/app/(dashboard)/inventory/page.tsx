@@ -12,6 +12,8 @@ import {
   Loader2,
   Trash2,
   Search,
+  ShoppingCart,
+  Check,
 } from "lucide-react";
 import type { InventoryItem } from "@/lib/types/database";
 
@@ -35,6 +37,7 @@ export default function InventoryPage() {
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
   const [filterCat, setFilterCat] = useState("all");
+  const [addedToCart, setAddedToCart] = useState<Set<string>>(new Set());
 
   const [name, setName] = useState("");
   const [quantity, setQuantity] = useState("1");
@@ -107,6 +110,46 @@ export default function InventoryPage() {
     setItems((prev) => prev.filter((i) => i.id !== id));
   }
 
+  async function addToShoppingList(item: InventoryItem) {
+    if (!household || !userId) return;
+
+    let { data: lists } = await supabase
+      .from("shopping_lists")
+      .select("id")
+      .eq("household_id", household.id)
+      .eq("is_active", true)
+      .limit(1);
+
+    let listId = lists?.[0]?.id;
+
+    if (!listId) {
+      const { data: newList } = await supabase
+        .from("shopping_lists")
+        .insert({ household_id: household.id, name: "רשימת קניות", created_by: userId })
+        .select()
+        .single();
+      listId = newList?.id;
+    }
+
+    if (!listId) return;
+
+    await supabase.from("shopping_items").insert({
+      list_id: listId,
+      name: item.name,
+      quantity: 1,
+      added_by: userId,
+    });
+
+    setAddedToCart((prev) => new Set(prev).add(item.id));
+    setTimeout(() => {
+      setAddedToCart((prev) => {
+        const next = new Set(prev);
+        next.delete(item.id);
+        return next;
+      });
+    }, 2000);
+  }
+
   function isLow(item: InventoryItem): boolean {
     if (item.min_quantity == null) return false;
     return Number(item.quantity) <= Number(item.min_quantity);
@@ -133,6 +176,7 @@ export default function InventoryPage() {
 
   const lowStockCount = items.filter(isLow).length;
   const expiringCount = items.filter((i) => isExpiringSoon(i) || isExpired(i)).length;
+  const lowStockItems = items.filter(isLow);
 
   const usedCategories = [...new Set(items.map((i) => i.category).filter(Boolean))];
 
@@ -163,6 +207,36 @@ export default function InventoryPage() {
         </button>
       </div>
 
+      {/* Low stock alert */}
+      {lowStockItems.length > 0 && (
+        <div className="rounded-2xl border border-accent/30 bg-accent/5 p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-accent" />
+              <span className="text-sm font-bold">{lowStockItems.length} פריטים עומדים להיגמר</span>
+            </div>
+            <button
+              onClick={async () => {
+                for (const item of lowStockItems) {
+                  if (!addedToCart.has(item.id)) await addToShoppingList(item);
+                }
+              }}
+              className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary-dark transition-colors"
+            >
+              <ShoppingCart className="h-3.5 w-3.5" />
+              הוסף הכל לקניות
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {lowStockItems.map((item) => (
+              <span key={item.id} className="rounded-full bg-white/80 px-2.5 py-1 text-xs font-medium">
+                {item.name}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Search + Filter */}
       <div className="flex flex-wrap gap-3">
         <div className="relative flex-1">
@@ -182,9 +256,7 @@ export default function InventoryPage() {
         >
           <option value="all">כל הקטגוריות</option>
           {usedCategories.map((cat) => (
-            <option key={cat} value={cat!}>
-              {cat}
-            </option>
+            <option key={cat} value={cat!}>{cat}</option>
           ))}
         </select>
       </div>
@@ -195,13 +267,9 @@ export default function InventoryPage() {
       ) : filtered.length === 0 ? (
         <div className="rounded-2xl border bg-surface p-12 text-center">
           <Package className="mx-auto mb-3 h-10 w-10 text-muted" />
-          <p className="font-medium">
-            {items.length === 0 ? "המלאי ריק" : "אין תוצאות"}
-          </p>
+          <p className="font-medium">{items.length === 0 ? "המלאי ריק" : "אין תוצאות"}</p>
           <p className="mt-1 text-sm text-muted">
-            {items.length === 0
-              ? "הוסיפו פריטים כדי לעקוב אחרי מה שיש בבית"
-              : "נסו חיפוש אחר"}
+            {items.length === 0 ? "הוסיפו פריטים כדי לעקוב אחרי מה שיש בבית" : "נסו חיפוש אחר"}
           </p>
         </div>
       ) : (
@@ -210,6 +278,7 @@ export default function InventoryPage() {
             const low = isLow(item);
             const expiring = isExpiringSoon(item);
             const expired = isExpired(item);
+            const inCart = addedToCart.has(item.id);
             return (
               <div
                 key={item.id}
@@ -226,9 +295,7 @@ export default function InventoryPage() {
                     <p className="font-medium">{item.name}</p>
                     {(low || expired || expiring) && (
                       <AlertTriangle
-                        className={`h-4 w-4 ${
-                          expired ? "text-danger" : "text-accent"
-                        }`}
+                        className={`h-4 w-4 ${expired ? "text-danger" : "text-accent"}`}
                       />
                     )}
                   </div>
@@ -236,17 +303,37 @@ export default function InventoryPage() {
                     {item.category && <span>{item.category}</span>}
                     {item.expiry_date && (
                       <span
-                        className={
-                          expired ? "text-danger font-medium" : expiring ? "text-accent font-medium" : ""
-                        }
+                        className={expired ? "text-danger font-medium" : expiring ? "text-accent font-medium" : ""}
                       >
-                        {expired
-                          ? "פג תוקף!"
-                          : `תוקף: ${new Date(item.expiry_date).toLocaleDateString("he-IL")}`}
+                        {expired ? "פג תוקף!" : `תוקף: ${new Date(item.expiry_date).toLocaleDateString("he-IL")}`}
                       </span>
                     )}
                   </div>
                 </div>
+
+                {low && (
+                  <button
+                    onClick={() => addToShoppingList(item)}
+                    disabled={inCart}
+                    className={`flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                      inCart
+                        ? "bg-success/10 text-success"
+                        : "border border-primary/20 bg-primary/5 text-primary hover:bg-primary/10"
+                    }`}
+                  >
+                    {inCart ? (
+                      <>
+                        <Check className="h-3.5 w-3.5" />
+                        נוסף
+                      </>
+                    ) : (
+                      <>
+                        <ShoppingCart className="h-3.5 w-3.5" />
+                        לקניות
+                      </>
+                    )}
+                  </button>
+                )}
 
                 <div className="flex items-center gap-1.5">
                   <button
@@ -285,10 +372,7 @@ export default function InventoryPage() {
           <div className="w-full max-w-md rounded-2xl bg-surface p-6 shadow-xl">
             <div className="mb-5 flex items-center justify-between">
               <h2 className="text-lg font-bold">פריט חדש למלאי</h2>
-              <button
-                onClick={() => setShowForm(false)}
-                className="rounded-lg p-1.5 hover:bg-surface-dim"
-              >
+              <button onClick={() => setShowForm(false)} className="rounded-lg p-1.5 hover:bg-surface-dim">
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -353,9 +437,7 @@ export default function InventoryPage() {
                   >
                     <option value="">ללא</option>
                     {CATEGORIES.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
+                      <option key={c} value={c}>{c}</option>
                     ))}
                   </select>
                 </div>
