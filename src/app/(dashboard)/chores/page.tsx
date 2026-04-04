@@ -13,7 +13,9 @@ import {
   Loader2,
   Trash2,
   UserCircle,
+  CalendarPlus,
 } from "lucide-react";
+import { googleCalendarUrl } from "@/lib/utils/calendar";
 import type { Chore, ChoreCompletion, Profile } from "@/lib/types/database";
 
 const frequencyLabels: Record<string, string> = {
@@ -241,6 +243,24 @@ export default function ChoresPage() {
                         )}
                       </div>
                     </div>
+                    <a
+                      href={googleCalendarUrl({
+                        title: `🏠 ${chore.title}`,
+                        date: new Date().toISOString().split("T")[0],
+                        details: chore.description || undefined,
+                        recurrence:
+                          chore.frequency === "daily" ? "DAILY"
+                          : chore.frequency === "weekly" ? "WEEKLY"
+                          : chore.frequency === "monthly" ? "MONTHLY"
+                          : undefined,
+                      })}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded-lg p-1.5 text-muted hover:text-primary"
+                      title="הוסף ליומן Google"
+                    >
+                      <CalendarPlus className="h-4 w-4" />
+                    </a>
                     <button
                       onClick={() => deleteChore(chore.id)}
                       className="rounded-lg p-1.5 text-muted hover:text-danger"

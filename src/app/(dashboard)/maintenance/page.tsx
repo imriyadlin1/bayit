@@ -14,7 +14,9 @@ import {
   Trash2,
   CheckCircle,
   AlertCircle,
+  CalendarPlus,
 } from "lucide-react";
+import { googleCalendarUrl } from "@/lib/utils/calendar";
 import type { MaintenanceItem } from "@/lib/types/database";
 
 const MAINTENANCE_CATEGORIES = [
@@ -256,6 +258,27 @@ export default function MaintenancePage() {
                   </div>
 
                   <div className="flex shrink-0 items-center gap-1">
+                    {item.next_due && (
+                      <a
+                        href={googleCalendarUrl({
+                          title: `🔧 ${item.title}`,
+                          date: item.next_due,
+                          details: [
+                            item.description,
+                            item.service_provider && `נותן שירות: ${item.service_provider}`,
+                            item.service_phone && `טלפון: ${item.service_phone}`,
+                          ].filter(Boolean).join("\n") || undefined,
+                          recurrence:
+                            item.frequency === "monthly" ? "MONTHLY" : item.frequency === "yearly" ? "YEARLY" : undefined,
+                        })}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="rounded-lg p-1.5 text-muted hover:text-primary"
+                        title="הוסף ליומן Google"
+                      >
+                        <CalendarPlus className="h-4 w-4" />
+                      </a>
+                    )}
                     <button
                       onClick={() => markDone(item)}
                       className="flex items-center gap-1 rounded-lg bg-success/10 px-3 py-1.5 text-xs font-semibold text-success hover:bg-success/20 transition-colors"

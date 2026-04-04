@@ -16,7 +16,9 @@ import {
   Loader2,
   Trash2,
   Clock,
+  CalendarPlus,
 } from "lucide-react";
+import { googleCalendarUrl } from "@/lib/utils/calendar";
 import type { Plant } from "@/lib/types/database";
 
 const PLANT_DATABASE: Record<string, { watering_days: number; sunlight: string; tip: string }> = {
@@ -272,13 +274,33 @@ export default function PlantsPage() {
                   >
                     השקיה: {getDaysUntilWatering(plant)}
                   </span>
-                  <button
-                    onClick={() => waterPlant(plant)}
-                    className="flex items-center gap-1 rounded-lg bg-blue-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-600 transition-colors"
-                  >
-                    <Droplets className="h-3 w-3" />
-                    השקיתי
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    {plant.next_watering && (
+                      <a
+                        href={googleCalendarUrl({
+                          title: `🌱 השקיה: ${plant.name}`,
+                          date: plant.next_watering,
+                          recurrence:
+                            plant.watering_frequency_days && plant.watering_frequency_days <= 3
+                              ? "DAILY"
+                              : "WEEKLY",
+                        })}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="rounded-lg p-1.5 text-muted hover:text-primary"
+                        title="תזכורת ביומן"
+                      >
+                        <CalendarPlus className="h-3.5 w-3.5" />
+                      </a>
+                    )}
+                    <button
+                      onClick={() => waterPlant(plant)}
+                      className="flex items-center gap-1 rounded-lg bg-blue-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-600 transition-colors"
+                    >
+                      <Droplets className="h-3 w-3" />
+                      השקיתי
+                    </button>
+                  </div>
                 </div>
               </div>
             );

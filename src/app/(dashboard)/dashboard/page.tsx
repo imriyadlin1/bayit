@@ -11,8 +11,14 @@ import {
   ListChecks,
   Droplets,
   TrendingUp,
+  BarChart3,
 } from "lucide-react";
 import Link from "next/link";
+
+interface MonthlyTotal {
+  label: string;
+  total: number;
+}
 
 interface DashboardData {
   monthlyExpenses: number;
@@ -20,6 +26,7 @@ interface DashboardData {
   plantsToWater: { id: string; name: string; location: string | null; last_watered: string | null }[];
   pendingChores: { id: string; title: string; assignee_name: string; frequency: string }[];
   recentExpenses: { title: string; amount: number; category_name: string; date: string }[];
+  expenseTrend: MonthlyTotal[];
 }
 
 export default function DashboardPage() {
@@ -90,6 +97,24 @@ export default function DashboardPage() {
     const monthlyExpenses =
       expensesRes.data?.reduce((sum, e: any) => sum + Number(e.amount), 0) || 0;
 
+    const trendMonths: MonthlyTotal[] = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const mStart = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+      const mEndD = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+      const mEnd = `${mEndD.getFullYear()}-${String(mEndD.getMonth() + 1).padStart(2, "0")}-01`;
+      const { data: mExpenses } = await supabase
+        .from("expenses")
+        .select("amount")
+        .eq("household_id", household!.id)
+        .gte("date", mStart)
+        .lt("date", mEnd);
+      trendMonths.push({
+        label: d.toLocaleDateString("he-IL", { month: "short" }),
+        total: mExpenses?.reduce((s, e: any) => s + Number(e.amount), 0) || 0,
+      });
+    }
+
     setData({
       monthlyExpenses,
       shoppingCount,
@@ -114,6 +139,7 @@ export default function DashboardPage() {
           category_name: e.expense_categories?.name || "אחר",
           date: new Date(e.date).toLocaleDateString("he-IL"),
         })) || [],
+      expenseTrend: trendMonths,
     });
 
     setLoading(false);
@@ -212,6 +238,40 @@ export default function DashboardPage() {
           );
         })}
       </div>
+
+      {/* Expense Trend Chart */}
+      {data.expenseTrend.some((m) => m.total > 0) && (
+        <div className="rounded-2xl border bg-surface p-5">
+          <div className="mb-4 flex items-center gap-2">
+            <BarChart3 className="h-5 w-5 text-muted" />
+            <h2 className="font-bold">מגמת הוצאות - 6 חודשים אחרונים</h2>
+          </div>
+          {(() => {
+            const max = Math.max(...data.expenseTrend.map((m) => m.total), 1);
+            return (
+              <div className="flex items-end gap-3 h-44">
+                {data.expenseTrend.map((m, i) => (
+                  <div key={i} className="flex flex-1 flex-col items-center gap-1">
+                    <span className="text-xs font-semibold text-muted">
+                      {m.total > 0 ? `₪${m.total.toLocaleString()}` : ""}
+                    </span>
+                    <div className="w-full flex justify-center" style={{ height: "120px" }}>
+                      <div
+                        className="w-full max-w-[48px] rounded-t-lg bg-primary/80 transition-all"
+                        style={{
+                          height: `${Math.max((m.total / max) * 100, m.total > 0 ? 4 : 0)}%`,
+                          marginTop: "auto",
+                        }}
+                      />
+                    </div>
+                    <span className="text-xs text-muted">{m.label}</span>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Recent Expenses */}

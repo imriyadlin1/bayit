@@ -11,6 +11,9 @@ import {
   Users,
   UserCircle,
   Home,
+  Pencil,
+  Loader2,
+  Save,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -18,6 +21,9 @@ export default function SettingsPage() {
   const { household, user, userId, loading: hhLoading } = useHousehold();
   const [members, setMembers] = useState<{ user_id: string; name: string; role: string }[]>([]);
   const [copied, setCopied] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [savingName, setSavingName] = useState(false);
   const supabase = createClient();
   const router = useRouter();
 
@@ -48,6 +54,18 @@ export default function SettingsPage() {
     await navigator.clipboard.writeText(household.invite_code);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  }
+
+  async function handleSaveName() {
+    if (!userId || !newName.trim()) return;
+    setSavingName(true);
+    await supabase
+      .from("profiles")
+      .update({ full_name: newName.trim() })
+      .eq("id", userId);
+    setEditingName(false);
+    setSavingName(false);
+    window.location.reload();
   }
 
   async function handleLogout() {
@@ -139,9 +157,48 @@ export default function SettingsPage() {
       <div className="rounded-2xl border bg-surface p-5">
         <h2 className="mb-4 font-bold">החשבון שלי</h2>
         <div className="space-y-3 text-sm">
-          <div className="flex justify-between rounded-xl bg-background p-3">
+          <div className="flex items-center justify-between rounded-xl bg-background p-3">
             <span className="text-muted">שם</span>
-            <span className="font-medium">{user?.full_name}</span>
+            {editingName ? (
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  className="w-40 rounded-lg border bg-surface px-2 py-1 text-sm"
+                  autoFocus
+                  onKeyDown={(e) => e.key === "Enter" && handleSaveName()}
+                />
+                <button
+                  onClick={handleSaveName}
+                  disabled={savingName || !newName.trim()}
+                  className="rounded-lg bg-primary p-1.5 text-white hover:bg-primary-dark disabled:opacity-60"
+                >
+                  {savingName ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Save className="h-3.5 w-3.5" />
+                  )}
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="font-medium">{user?.full_name || "לא הוגדר"}</span>
+                <button
+                  onClick={() => {
+                    setNewName(user?.full_name || "");
+                    setEditingName(true);
+                  }}
+                  className="rounded-lg p-1 text-muted hover:bg-surface-dim"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
+          </div>
+          <div className="flex justify-between rounded-xl bg-background p-3">
+            <span className="text-muted">אימייל</span>
+            <span className="font-medium" dir="ltr">{user?.email || "—"}</span>
           </div>
         </div>
       </div>

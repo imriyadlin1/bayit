@@ -15,6 +15,7 @@ import {
   ChevronLeft,
   Loader2,
   Trash2,
+  Download,
 } from "lucide-react";
 import type { Expense, ExpenseCategory } from "@/lib/types/database";
 
@@ -117,6 +118,31 @@ export default function ExpensesPage() {
     setExpenses((prev) => prev.filter((e) => e.id !== id));
   }
 
+  function exportCSV() {
+    const bom = "\uFEFF";
+    const headers = ["תיאור", "סכום", "קטגוריה", "תאריך", "הערות", "חוזר"];
+    const rows = expenses.map((e) => [
+      e.title,
+      Number(e.amount),
+      e.category?.name || "ללא קטגוריה",
+      e.date,
+      e.notes || "",
+      e.is_recurring ? "כן" : "לא",
+    ]);
+
+    const csv =
+      bom +
+      [headers, ...rows].map((r) => r.map((v) => `"${v}"`).join(",")).join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `הוצאות-${monthName.replace(" ", "-")}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   const totalMonth = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
 
   const [year, month] = currentMonth.split("-").map(Number);
@@ -149,13 +175,24 @@ export default function ExpensesPage() {
           <h1 className="text-2xl font-bold">הוצאות</h1>
           <p className="text-muted">מעקב אחרי ההוצאות של משק הבית</p>
         </div>
-        <button
-          onClick={() => setShowForm(true)}
-          className="flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          הוצאה חדשה
-        </button>
+        <div className="flex items-center gap-2">
+          {expenses.length > 0 && (
+            <button
+              onClick={exportCSV}
+              className="flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-medium hover:bg-surface-dim transition-colors"
+            >
+              <Download className="h-4 w-4" />
+              ייצוא
+            </button>
+          )}
+          <button
+            onClick={() => setShowForm(true)}
+            className="flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            הוצאה חדשה
+          </button>
+        </div>
       </div>
 
       {/* Month Navigation + Total */}

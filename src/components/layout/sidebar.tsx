@@ -38,6 +38,7 @@ export function Sidebar({
 }) {
   const pathname = usePathname();
   const [isAdmin, setIsAdmin] = useState(false);
+  const [householdName, setHouseholdName] = useState<string | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
@@ -50,6 +51,15 @@ export function Sidebar({
         .single()
         .then(({ data }) => {
           if (data?.is_admin) setIsAdmin(true);
+        });
+      supabase
+        .from("household_members")
+        .select("household_id, households(name)")
+        .eq("user_id", user.id)
+        .limit(1)
+        .single()
+        .then(({ data }) => {
+          if (data) setHouseholdName((data as any).households?.name);
         });
     });
   }, []);
@@ -133,7 +143,9 @@ export function Sidebar({
         <div className="border-t p-4">
           <div className="rounded-xl bg-surface-dim p-3">
             <p className="text-xs text-muted">משק הבית</p>
-            <p className="text-sm font-semibold">הדירה שלנו</p>
+            <p className="text-sm font-semibold">
+              {householdName || "טוען..."}
+            </p>
           </div>
         </div>
       </aside>
