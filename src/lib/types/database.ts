@@ -33,6 +33,8 @@ export interface ExpenseCategory {
   icon: string | null;
   color: string | null;
   is_default: boolean;
+  /** סדר תצוגה — ברירות מחדל 1..N, מותאמות אישית ממשיכות אחריהן */
+  sort_order: number;
   created_at: string;
 }
 

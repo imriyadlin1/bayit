@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useHousehold } from "@/hooks/use-household";
 import { useHouseholdPermissions } from "@/contexts/household-permissions-context";
@@ -23,6 +23,7 @@ import {
   Check,
 } from "lucide-react";
 import type { Expense, ExpenseCategory, Budget } from "@/lib/types/database";
+import { sortExpenseCategoriesForDisplay } from "@/lib/expense-category-sort";
 
 function ExpensesPageInner() {
   const { household, userId, loading: hhLoading } = useHousehold();
@@ -73,12 +74,19 @@ function ExpensesPageInner() {
         : `${year}-${String(month + 1).padStart(2, "0")}-01`;
 
     const [catsRes, memberRes, budgetRes] = await Promise.all([
-      supabase.from("expense_categories").select("*").eq("household_id", household!.id),
+      supabase
+        .from("expense_categories")
+        .select("*")
+        .eq("household_id", household!.id),
       supabase.from("household_members").select("user_id, profiles(full_name)").eq("household_id", household!.id),
       supabase.from("budgets").select("*").eq("household_id", household!.id).eq("month", currentMonth),
     ]);
 
-    if (catsRes.data) setCategories(catsRes.data as ExpenseCategory[]);
+    if (catsRes.data) {
+      setCategories(
+        sortExpenseCategoriesForDisplay(catsRes.data as ExpenseCategory[])
+      );
+    }
     if (budgetRes.data) setBudgets(budgetRes.data as Budget[]);
 
     const memberList = memberRes.data?.map((m: any) => ({
@@ -234,7 +242,13 @@ function ExpensesPageInner() {
     );
   }
 
-  const catBreakdown = categories
+  /** מיון בכל רינדור — לא תלוי בדיפלוי ישן / סדר הגעה מ-Supabase */
+  const categoriesOrdered = useMemo(
+    () => sortExpenseCategoriesForDisplay(categories),
+    [categories]
+  );
+
+  const catBreakdown = categoriesOrdered
     .map((cat) => {
       const catTotal = expenses
         .filter((e) => e.category_id === cat.id)
@@ -355,7 +369,7 @@ function ExpensesPageInner() {
         >
           הכל
         </button>
-        {categories.map((cat) => (
+        {categoriesOrdered.map((cat) => (
           <button
             key={cat.id}
             onClick={() => setFilterCat(cat.id)}
@@ -559,7 +573,7 @@ function ExpensesPageInner() {
                   className="w-full rounded-xl border bg-background py-3 px-4 text-sm"
                 >
                   <option value="">בחרו קטגוריה</option>
-                  {categories.map((cat) => (
+                  {categoriesOrdered.map((cat) => (
                     <option key={cat.id} value={cat.id}>{cat.name}</option>
                   ))}
                 </select>
@@ -669,7 +683,7 @@ function ExpensesPageInner() {
               <div className="mb-4 space-y-2">
                 <p className="text-sm font-medium text-muted">תקציבים קיימים:</p>
                 {budgets.map((b) => {
-                  const cat = categories.find((c) => c.id === b.category_id);
+                  const cat = categoriesOrdered.find((c) => c.id === b.category_id);
                   return (
                     <div key={b.id} className="flex items-center justify-between rounded-lg bg-background p-2 text-sm">
                       <span>{cat?.name || "כללי"}</span>
@@ -689,7 +703,7 @@ function ExpensesPageInner() {
                   className="w-full rounded-xl border bg-background py-3 px-4 text-sm"
                 >
                   <option value="">כללי (כל ההוצאות)</option>
-                  {categories.map((cat) => (
+                  {categoriesOrdered.map((cat) => (
                     <option key={cat.id} value={cat.id}>{cat.name}</option>
                   ))}
                 </select>

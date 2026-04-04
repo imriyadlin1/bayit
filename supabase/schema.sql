@@ -70,6 +70,7 @@ CREATE TABLE expense_categories (
   icon TEXT,
   color TEXT,
   is_default BOOLEAN DEFAULT FALSE,
+  sort_order INT NOT NULL DEFAULT 10000,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -77,17 +78,20 @@ CREATE TABLE expense_categories (
 CREATE OR REPLACE FUNCTION public.seed_expense_categories()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO expense_categories (household_id, name, icon, color, is_default) VALUES
-    (NEW.id, 'שכר דירה', 'Home', '#6366f1', TRUE),
-    (NEW.id, 'חשמל', 'Zap', '#f59e0b', TRUE),
-    (NEW.id, 'מים', 'Droplets', '#3b82f6', TRUE),
-    (NEW.id, 'ארנונה', 'Building', '#8b5cf6', TRUE),
-    (NEW.id, 'גז', 'Flame', '#ef4444', TRUE),
-    (NEW.id, 'אינטרנט', 'Wifi', '#06b6d4', TRUE),
-    (NEW.id, 'סופר', 'ShoppingCart', '#10b981', TRUE),
-    (NEW.id, 'ביטוח', 'Shield', '#64748b', TRUE),
-    (NEW.id, 'ועד בית', 'Building2', '#a855f7', TRUE),
-    (NEW.id, 'אחר', 'MoreHorizontal', '#737373', TRUE);
+  INSERT INTO expense_categories (household_id, name, icon, color, is_default, sort_order) VALUES
+    (NEW.id, 'אוכל בחוץ', 'UtensilsCrossed', '#f97316', TRUE, 1),
+    (NEW.id, 'סופר', 'ShoppingCart', '#10b981', TRUE, 2),
+    (NEW.id, 'שכר דירה', 'Home', '#6366f1', TRUE, 3),
+    (NEW.id, 'חשמל', 'Zap', '#f59e0b', TRUE, 4),
+    (NEW.id, 'מים', 'Droplets', '#3b82f6', TRUE, 5),
+    (NEW.id, 'גז', 'Flame', '#ef4444', TRUE, 6),
+    (NEW.id, 'ארנונה', 'Building', '#8b5cf6', TRUE, 7),
+    (NEW.id, 'ועד בית', 'Building2', '#a855f7', TRUE, 8),
+    (NEW.id, 'אינטרנט', 'Wifi', '#06b6d4', TRUE, 9),
+    (NEW.id, 'טלוויזיה', 'Tv', '#7c3aed', TRUE, 10),
+    (NEW.id, 'ביטוח', 'Shield', '#64748b', TRUE, 11),
+    (NEW.id, 'דלק', 'Fuel', '#ca8a04', TRUE, 12),
+    (NEW.id, 'אחר', 'MoreHorizontal', '#737373', TRUE, 13);
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

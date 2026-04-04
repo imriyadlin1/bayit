@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useHousehold } from "@/hooks/use-household";
+import { useHouseholdPermissions } from "@/contexts/household-permissions-context";
 import { useTheme } from "@/hooks/use-theme";
 import { LoadingScreen } from "@/components/ui/loading";
 import {
@@ -21,9 +22,12 @@ import {
   Eye,
   EyeOff,
   UserMinus,
+  Wallet,
+  Trash2,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import type { FeatureKey, AccessLevel } from "@/lib/types/database";
+import type { ExpenseCategory, FeatureKey, AccessLevel } from "@/lib/types/database";
+import { sortExpenseCategoriesForDisplay } from "@/lib/expense-category-sort";
 
 const FEATURES: { key: FeatureKey; label: string }[] = [
   { key: "expenses", label: "הוצאות" },
@@ -43,6 +47,8 @@ const ACCESS_LABELS: Record<AccessLevel, string> = {
 
 export default function SettingsPage() {
   const { household, user, userId, loading: hhLoading, isPersonal } = useHousehold();
+  const { canEdit } = useHouseholdPermissions();
+  const canEditExpenses = canEdit("expenses");
   const { dark, toggle } = useTheme();
   const [members, setMembers] = useState<{ user_id: string; name: string; role: string }[]>([]);
   const [copied, setCopied] = useState(false);
@@ -55,6 +61,11 @@ export default function SettingsPage() {
   const [savingPerms, setSavingPerms] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<{ user_id: string; name: string } | null>(null);
   const [removing, setRemoving] = useState(false);
+  const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>([]);
+  const [loadingExpenseCats, setLoadingExpenseCats] = useState(false);
+  const [newExpenseCatName, setNewExpenseCatName] = useState("");
+  const [addingExpenseCat, setAddingExpenseCat] = useState(false);
+  const [deletingExpenseCatId, setDeletingExpenseCatId] = useState<string | null>(null);
   const supabase = createClient();
   const router = useRouter();
 
@@ -62,7 +73,85 @@ export default function SettingsPage() {
     if (!household) return;
     loadMembers();
     loadPermissions();
-  }, [household]);
+    if (!isPersonal) loadExpenseCategories();
+  }, [household, isPersonal]);
+
+  async function loadExpenseCategories() {
+    if (!household || isPersonal) return;
+    setLoadingExpenseCats(true);
+    const { data, error } = await supabase
+      .from("expense_categories")
+      .select("*")
+      .eq("household_id", household.id);
+    setLoadingExpenseCats(false);
+    if (error || !data) return;
+    setExpenseCategories(
+      sortExpenseCategoriesForDisplay(data as ExpenseCategory[])
+    );
+  }
+
+  async function addCustomExpenseCategory() {
+    if (!household || isPersonal || !canEditExpenses) return;
+    const name = newExpenseCatName.trim();
+    if (!name) return;
+    if (expenseCategories.some((c) => c.name === name)) {
+      alert("כבר קיימת קטגוריה בשם הזה.");
+      return;
+    }
+    setAddingExpenseCat(true);
+    const maxOrder = expenseCategories.reduce(
+      (m, c) => Math.max(m, c.sort_order ?? 0),
+      0
+    );
+    const { error } = await supabase.from("expense_categories").insert({
+      household_id: household.id,
+      name,
+      icon: "Tag",
+      color: "#6366f1",
+      is_default: false,
+      sort_order: maxOrder + 1,
+    });
+    setAddingExpenseCat(false);
+    if (error) {
+      alert(error.message || "לא ניתן להוסיף קטגוריה.");
+      return;
+    }
+    setNewExpenseCatName("");
+    await loadExpenseCategories();
+  }
+
+  async function removeCustomExpenseCategory(cat: ExpenseCategory) {
+    if (!household || isPersonal || !canEditExpenses) return;
+    if (cat.is_default) return;
+    const { count, error: cntErr } = await supabase
+      .from("expenses")
+      .select("id", { count: "exact", head: true })
+      .eq("household_id", household.id)
+      .eq("category_id", cat.id);
+    if (cntErr) {
+      alert(cntErr.message || "שגיאה בבדיקה.");
+      return;
+    }
+    if (count && count > 0) {
+      alert(
+        "לא ניתן למחוק — יש הוצאות משויכות לקטגוריה. שייכו אותן לקטגוריה אחרת ונסו שוב."
+      );
+      return;
+    }
+    if (!confirm(`למחוק את הקטגוריה «${cat.name}»?`)) return;
+    setDeletingExpenseCatId(cat.id);
+    const { error } = await supabase
+      .from("expense_categories")
+      .delete()
+      .eq("id", cat.id)
+      .eq("household_id", household.id);
+    setDeletingExpenseCatId(null);
+    if (error) {
+      alert(error.message || "לא ניתן למחוק.");
+      return;
+    }
+    await loadExpenseCategories();
+  }
 
   async function loadMembers() {
     const { data } = await supabase
@@ -261,6 +350,95 @@ export default function SettingsPage() {
               שתפו את הקוד עם בני הבית כדי שיוכלו להצטרף
             </p>
           </div>
+        </div>
+      )}
+
+      {/* Expense categories (household) */}
+      {!isPersonal && household && (
+        <div className="rounded-2xl border bg-surface p-5">
+          <div className="mb-4 flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <Wallet className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="font-bold">קטגוריות הוצאות</h2>
+              <p className="text-xs text-muted">
+                סדר הקטגוריות הבסיסיות קבוע. אפשר להוסיף קטגוריות משלכם (למשל רפואה).
+              </p>
+            </div>
+          </div>
+
+          {loadingExpenseCats ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-muted" />
+            </div>
+          ) : (
+            <>
+              <ul className="mb-4 space-y-1.5 rounded-xl bg-background p-3">
+                {expenseCategories.map((cat) => (
+                  <li
+                    key={cat.id}
+                    className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-sm"
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span
+                        className="h-2.5 w-2.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: cat.color || "#737373" }}
+                      />
+                      <span className="truncate font-medium">{cat.name}</span>
+                      {cat.is_default && (
+                        <span className="shrink-0 text-[10px] text-muted">ברירת מחדל</span>
+                      )}
+                    </span>
+                    {canEditExpenses && !cat.is_default && (
+                      <button
+                        type="button"
+                        onClick={() => removeCustomExpenseCategory(cat)}
+                        disabled={deletingExpenseCatId === cat.id}
+                        className="shrink-0 rounded-lg p-1.5 text-muted hover:bg-danger/10 hover:text-danger disabled:opacity-50"
+                        title="מחיקת קטגוריה"
+                        aria-label={`מחיקת ${cat.name}`}
+                      >
+                        {deletingExpenseCatId === cat.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4" />
+                        )}
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+
+              {canEditExpenses && (
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <input
+                    type="text"
+                    value={newExpenseCatName}
+                    onChange={(e) => setNewExpenseCatName(e.target.value)}
+                    onKeyDown={(e) =>
+                      e.key === "Enter" && !addingExpenseCat && addCustomExpenseCategory()
+                    }
+                    placeholder="שם קטגוריה חדשה"
+                    className="min-w-0 flex-1 rounded-xl border bg-surface px-3 py-2 text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={addCustomExpenseCategory}
+                    disabled={addingExpenseCat || !newExpenseCatName.trim()}
+                    className="flex shrink-0 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-dark disabled:opacity-50"
+                  >
+                    {addingExpenseCat ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Save className="h-4 w-4" />
+                    )}
+                    הוספה
+                  </button>
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
 
