@@ -1,0 +1,350 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { useHousehold } from "@/hooks/use-household";
+import { LoadingScreen } from "@/components/ui/loading";
+import {
+  Wallet,
+  ShoppingCart,
+  Sprout,
+  ListChecks,
+  Droplets,
+  TrendingUp,
+} from "lucide-react";
+import Link from "next/link";
+
+interface DashboardData {
+  monthlyExpenses: number;
+  shoppingCount: number;
+  plantsToWater: { id: string; name: string; location: string | null; last_watered: string | null }[];
+  pendingChores: { id: string; title: string; assignee_name: string; frequency: string }[];
+  recentExpenses: { title: string; amount: number; category_name: string; date: string }[];
+}
+
+export default function DashboardPage() {
+  const { household, userId, user, loading: hhLoading } = useHousehold();
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const supabase = createClient();
+
+  useEffect(() => {
+    if (!household) return;
+    loadDashboard();
+  }, [household]);
+
+  async function loadDashboard() {
+    setLoading(true);
+    const now = new Date();
+    const startOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+
+    const [expensesRes, shoppingRes, plantsRes, choresRes, recentRes, membersRes] =
+      await Promise.all([
+        supabase
+          .from("expenses")
+          .select("amount")
+          .eq("household_id", household!.id)
+          .gte("date", startOfMonth),
+        supabase
+          .from("shopping_lists")
+          .select("id")
+          .eq("household_id", household!.id)
+          .eq("is_active", true)
+          .limit(1),
+        supabase
+          .from("plants")
+          .select("id, name, location, last_watered, next_watering")
+          .eq("household_id", household!.id)
+          .lte("next_watering", new Date().toISOString().split("T")[0]),
+        supabase
+          .from("chores")
+          .select("id, title, frequency, assigned_to")
+          .eq("household_id", household!.id),
+        supabase
+          .from("expenses")
+          .select("title, amount, date, expense_categories(name)")
+          .eq("household_id", household!.id)
+          .order("date", { ascending: false })
+          .limit(5),
+        supabase
+          .from("household_members")
+          .select("user_id, profiles(full_name)")
+          .eq("household_id", household!.id),
+      ]);
+
+    const memberMap: Record<string, string> = {};
+    membersRes.data?.forEach((m: any) => {
+      memberMap[m.user_id] = m.profiles?.full_name || "ללא שם";
+    });
+
+    let shoppingCount = 0;
+    if (shoppingRes.data?.[0]) {
+      const { count } = await supabase
+        .from("shopping_items")
+        .select("id", { count: "exact", head: true })
+        .eq("list_id", shoppingRes.data[0].id)
+        .eq("is_checked", false);
+      shoppingCount = count || 0;
+    }
+
+    const monthlyExpenses =
+      expensesRes.data?.reduce((sum, e: any) => sum + Number(e.amount), 0) || 0;
+
+    setData({
+      monthlyExpenses,
+      shoppingCount,
+      plantsToWater:
+        plantsRes.data?.map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          location: p.location,
+          last_watered: p.last_watered,
+        })) || [],
+      pendingChores:
+        choresRes.data?.map((c: any) => ({
+          id: c.id,
+          title: c.title,
+          frequency: c.frequency,
+          assignee_name: memberMap[c.assigned_to] || "לא משויך",
+        })) || [],
+      recentExpenses:
+        recentRes.data?.map((e: any) => ({
+          title: e.title,
+          amount: Number(e.amount),
+          category_name: e.expense_categories?.name || "אחר",
+          date: new Date(e.date).toLocaleDateString("he-IL"),
+        })) || [],
+    });
+
+    setLoading(false);
+  }
+
+  async function waterPlant(plantId: string) {
+    const today = new Date().toISOString().split("T")[0];
+
+    const { data: plant } = await supabase
+      .from("plants")
+      .select("watering_frequency_days")
+      .eq("id", plantId)
+      .single();
+
+    const nextWater = new Date();
+    nextWater.setDate(nextWater.getDate() + ((plant as any)?.watering_frequency_days || 7));
+
+    await supabase
+      .from("plants")
+      .update({
+        last_watered: today,
+        next_watering: nextWater.toISOString().split("T")[0],
+      })
+      .eq("id", plantId);
+
+    await supabase.from("plant_care_logs").insert({
+      plant_id: plantId,
+      action: "water",
+      done_by: userId,
+    });
+
+    loadDashboard();
+  }
+
+  if (hhLoading || loading) return <LoadingScreen />;
+  if (!data) return <LoadingScreen />;
+
+  const stats = [
+    {
+      label: "הוצאות החודש",
+      value: `₪${data.monthlyExpenses.toLocaleString()}`,
+      icon: Wallet,
+      color: "bg-indigo-100 text-indigo-600",
+      href: "/expenses",
+    },
+    {
+      label: "פריטים לקנות",
+      value: String(data.shoppingCount),
+      icon: ShoppingCart,
+      color: "bg-emerald-100 text-emerald-600",
+      href: "/shopping",
+    },
+    {
+      label: "צמחים להשקות",
+      value: String(data.plantsToWater.length),
+      icon: Sprout,
+      color: "bg-green-100 text-green-600",
+      href: "/plants",
+    },
+    {
+      label: "מטלות",
+      value: String(data.pendingChores.length),
+      icon: ListChecks,
+      color: "bg-amber-100 text-amber-600",
+      href: "/chores",
+    },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold">
+          שלום{user?.full_name ? `, ${user.full_name}` : ""}! 👋
+        </h1>
+        <p className="text-muted">הנה סיכום מצב הבית שלכם</p>
+      </div>
+
+      {/* Stats */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {stats.map((stat) => {
+          const Icon = stat.icon;
+          return (
+            <Link
+              key={stat.label}
+              href={stat.href}
+              className="group rounded-2xl border bg-surface p-5 transition-all hover:shadow-md hover:shadow-black/5"
+            >
+              <div
+                className={`mb-3 flex h-10 w-10 items-center justify-center rounded-xl ${stat.color}`}
+              >
+                <Icon className="h-5 w-5" />
+              </div>
+              <p className="text-2xl font-bold">{stat.value}</p>
+              <p className="text-sm text-muted">{stat.label}</p>
+            </Link>
+          );
+        })}
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Recent Expenses */}
+        <div className="rounded-2xl border bg-surface p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="font-bold">הוצאות אחרונות</h2>
+            <Link href="/expenses" className="text-sm text-primary hover:underline">
+              הכל
+            </Link>
+          </div>
+          {data.recentExpenses.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted">אין הוצאות עדיין</p>
+          ) : (
+            <div className="space-y-3">
+              {data.recentExpenses.map((expense, i) => (
+                <div
+                  key={i}
+                  className="flex items-center justify-between rounded-xl bg-background p-3"
+                >
+                  <div>
+                    <p className="text-sm font-medium">{expense.title}</p>
+                    <p className="text-xs text-muted">
+                      {expense.category_name} · {expense.date}
+                    </p>
+                  </div>
+                  <span className="font-semibold">₪{expense.amount.toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Plants to Water */}
+        <div className="rounded-2xl border bg-surface p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="font-bold">צמחים להשקות</h2>
+            <Link href="/plants" className="text-sm text-primary hover:underline">
+              הכל
+            </Link>
+          </div>
+          {data.plantsToWater.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted">
+              כל הצמחים מושקים 🌱
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {data.plantsToWater.map((plant) => (
+                <div
+                  key={plant.id}
+                  className="flex items-center justify-between rounded-xl bg-background p-3"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-green-100 text-green-600">
+                      <Droplets className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">{plant.name}</p>
+                      <p className="text-xs text-muted">
+                        {plant.location || ""}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => waterPlant(plant.id)}
+                    className="text-xs font-semibold text-primary hover:underline"
+                  >
+                    השקיתי ✓
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Chores */}
+        <div className="rounded-2xl border bg-surface p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="font-bold">מטלות</h2>
+            <Link href="/chores" className="text-sm text-primary hover:underline">
+              הכל
+            </Link>
+          </div>
+          {data.pendingChores.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted">אין מטלות עדיין</p>
+          ) : (
+            <div className="space-y-3">
+              {data.pendingChores.slice(0, 4).map((chore) => (
+                <div
+                  key={chore.id}
+                  className="flex items-center justify-between rounded-xl bg-background p-3"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="h-2.5 w-2.5 rounded-full bg-accent" />
+                    <p className="text-sm font-medium">{chore.title}</p>
+                  </div>
+                  <span className="rounded-full bg-surface-dim px-3 py-1 text-xs font-medium">
+                    {chore.assignee_name}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Quick Actions */}
+        <div className="rounded-2xl border bg-surface p-5">
+          <h2 className="mb-4 font-bold">פעולות מהירות</h2>
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { label: "הוצאה חדשה", href: "/expenses", icon: Wallet, color: "bg-indigo-100 text-indigo-600" },
+              { label: "פריט לקניות", href: "/shopping", icon: ShoppingCart, color: "bg-emerald-100 text-emerald-600" },
+              { label: "צמח חדש", href: "/plants", icon: Sprout, color: "bg-green-100 text-green-600" },
+              { label: "מטלה חדשה", href: "/chores", icon: ListChecks, color: "bg-amber-100 text-amber-600" },
+            ].map((action) => {
+              const Icon = action.icon;
+              return (
+                <Link
+                  key={action.label}
+                  href={action.href}
+                  className="flex items-center gap-3 rounded-xl border p-3.5 transition-all hover:bg-surface-dim"
+                >
+                  <div
+                    className={`flex h-9 w-9 items-center justify-center rounded-lg ${action.color}`}
+                  >
+                    <Icon className="h-4 w-4" />
+                  </div>
+                  <span className="text-sm font-medium">{action.label}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
