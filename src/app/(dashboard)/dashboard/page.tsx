@@ -217,23 +217,25 @@ export default function DashboardPage() {
         <p className="text-muted">הנה סיכום מצב הבית שלכם</p>
       </div>
 
-      {/* Stats */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {/* Stats - compact grid on mobile, wide cards on desktop */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
         {stats.map((stat) => {
           const Icon = stat.icon;
           return (
             <Link
               key={stat.label}
               href={stat.href}
-              className="group rounded-2xl border bg-surface p-5 transition-all hover:shadow-md hover:shadow-black/5"
+              className="group flex items-center gap-3 rounded-xl border bg-surface p-3.5 transition-all hover:shadow-md hover:shadow-black/5 lg:flex-col lg:items-start lg:gap-0 lg:rounded-2xl lg:p-5"
             >
               <div
-                className={`mb-3 flex h-10 w-10 items-center justify-center rounded-xl ${stat.color}`}
+                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg lg:mb-3 lg:h-10 lg:w-10 lg:rounded-xl ${stat.color}`}
               >
-                <Icon className="h-5 w-5" />
+                <Icon className="h-4 w-4 lg:h-5 lg:w-5" />
               </div>
-              <p className="text-2xl font-bold">{stat.value}</p>
-              <p className="text-sm text-muted">{stat.label}</p>
+              <div>
+                <p className="text-lg font-bold lg:text-2xl">{stat.value}</p>
+                <p className="text-xs text-muted lg:text-sm">{stat.label}</p>
+              </div>
             </Link>
           );
         })}
