@@ -12,26 +12,19 @@ interface Notification {
   href: string;
 }
 
-export function Header({ onMenuClick }: { onMenuClick: () => void }) {
+export function Header({ onMenuClick, householdId }: { onMenuClick: () => void; householdId?: string }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showPanel, setShowPanel] = useState(false);
 
   useEffect(() => {
+    if (!householdId) return;
     const supabase = createClient();
 
     async function loadNotifications() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data: membership } = await supabase
-        .from("household_members")
-        .select("household_id")
-        .eq("user_id", user.id)
-        .limit(1)
-        .single();
-
-      if (!membership) return;
-      const hhId = membership.household_id;
+      const hhId = householdId!;
       const today = new Date().toISOString().split("T")[0];
       const items: Notification[] = [];
 
@@ -125,7 +118,7 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
     }
 
     loadNotifications();
-  }, []);
+  }, [householdId]);
 
   const iconMap = {
     plant: Droplets,

@@ -13,6 +13,7 @@ export interface Household {
   name: string;
   created_by: string;
   invite_code: string;
+  is_personal: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -173,6 +174,17 @@ export interface MaintenanceItem {
   created_by: string;
   created_at: string;
   updated_at: string;
+}
+
+export type FeatureKey = "expenses" | "shopping" | "inventory" | "plants" | "chores" | "maintenance" | "notes";
+export type AccessLevel = "hidden" | "view" | "edit";
+
+export interface MemberPermission {
+  id: string;
+  household_id: string;
+  user_id: string;
+  feature: FeatureKey;
+  access_level: AccessLevel;
 }
 
 export interface HouseholdNote {
