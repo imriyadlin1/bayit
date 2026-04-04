@@ -252,13 +252,12 @@ export default function DashboardPage() {
   if (!data) return <LoadingScreen />;
 
   const see = (f: FeatureKey) => getLevel(f) !== "hidden";
-  const maskExpenseMoney = see("expenses") && getLevel("expenses") === "view";
 
   const statDefs = [
     {
       feature: "expenses" as FeatureKey,
       label: "הוצאות החודש",
-      value: maskExpenseMoney ? "—" : `₪${data.monthlyExpenses.toLocaleString()}`,
+      value: `₪${data.monthlyExpenses.toLocaleString()}`,
       icon: Wallet,
       color: "bg-indigo-100 text-indigo-600",
       href: "/expenses",
@@ -350,7 +349,7 @@ export default function DashboardPage() {
                 {data.expenseTrend.map((m, i) => (
                   <div key={i} className="flex flex-1 flex-col items-center gap-1">
                     <span className="text-xs font-semibold text-muted">
-                      {!maskExpenseMoney && m.total > 0 ? `₪${m.total.toLocaleString()}` : ""}
+                      {m.total > 0 ? `₪${m.total.toLocaleString()}` : ""}
                     </span>
                     <div className="w-full flex justify-center" style={{ height: "120px" }}>
                       <div
@@ -454,7 +453,7 @@ export default function DashboardPage() {
                     </p>
                   </div>
                   <span className="font-semibold">
-                    {maskExpenseMoney ? "—" : `₪${expense.amount.toLocaleString()}`}
+                    ₪{expense.amount.toLocaleString()}
                   </span>
                 </div>
               ))}

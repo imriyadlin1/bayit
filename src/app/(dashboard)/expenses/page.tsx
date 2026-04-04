@@ -26,9 +26,8 @@ import type { Expense, ExpenseCategory, Budget } from "@/lib/types/database";
 
 function ExpensesPageInner() {
   const { household, userId, loading: hhLoading } = useHousehold();
-  const { canEdit, getLevel } = useHouseholdPermissions();
+  const { canEdit } = useHouseholdPermissions();
   const canMutate = canEdit("expenses");
-  const maskMoney = getLevel("expenses") === "view";
   const [expenses, setExpenses] = useState<(Expense & { category?: ExpenseCategory; added_by_name?: string })[]>([]);
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
@@ -192,7 +191,7 @@ function ExpensesPageInner() {
     const headers = ["תיאור", "סכום", "קטגוריה", "תאריך", "הערות", "חוזר"];
     const rows = expenses.map((e) => [
       e.title,
-      maskMoney ? "—" : Number(e.amount),
+      Number(e.amount),
       e.category?.name || "ללא קטגוריה",
       e.date,
       e.notes || "",
@@ -323,8 +322,8 @@ function ExpensesPageInner() {
         </div>
         <div className="text-left">
           <p className="text-sm text-muted">סה״כ החודש</p>
-          <p className="text-2xl font-bold">{maskMoney ? "—" : `₪${totalMonth.toLocaleString()}`}</p>
-          {!maskMoney && totalBudget > 0 && (
+          <p className="text-2xl font-bold">₪{totalMonth.toLocaleString()}</p>
+          {totalBudget > 0 && (
             <div className="mt-1">
               <div className="flex items-center gap-2 text-xs">
                 <span className="text-muted">מתוך תקציב ₪{totalBudget.toLocaleString()}</span>
@@ -404,7 +403,7 @@ function ExpensesPageInner() {
               </div>
               <div className="flex items-center gap-3">
                 <span className="text-lg font-bold">
-                  {maskMoney ? "—" : `₪${Number(expense.amount).toLocaleString()}`}
+                  ₪{Number(expense.amount).toLocaleString()}
                 </span>
                 {canMutate && (
                   <button
@@ -471,11 +470,11 @@ function ExpensesPageInner() {
                     />
                     <span className="flex-1 text-sm">{cat.name}</span>
                     <span className="text-sm font-semibold">
-                      {maskMoney ? "—" : `₪${cat.total.toLocaleString()}`}
+                      ₪{cat.total.toLocaleString()}
                     </span>
                     {cat.budget && (
                       <span className="text-xs text-muted">
-                        / {maskMoney ? "—" : `₪${cat.budget.toLocaleString()}`}
+                        / ₪{cat.budget.toLocaleString()}
                       </span>
                     )}
                   </div>
