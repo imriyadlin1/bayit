@@ -1,7 +1,9 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 import {
   LayoutDashboard,
   Wallet,
@@ -13,6 +15,7 @@ import {
   Settings,
   Home,
   X,
+  Shield,
 } from "lucide-react";
 
 const navItems = [
@@ -34,6 +37,22 @@ export function Sidebar({
   onClose: () => void;
 }) {
   const pathname = usePathname();
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      supabase
+        .from("profiles")
+        .select("is_admin")
+        .eq("id", user.id)
+        .single()
+        .then(({ data }) => {
+          if (data?.is_admin) setIsAdmin(true);
+        });
+    });
+  }, []);
 
   return (
     <>
@@ -89,6 +108,24 @@ export function Sidebar({
                 </li>
               );
             })}
+
+            {isAdmin && (
+              <li>
+                <div className="my-2 border-t" />
+                <Link
+                  href="/admin"
+                  onClick={onClose}
+                  className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
+                    pathname === "/admin"
+                      ? "bg-amber-100 text-amber-700"
+                      : "text-amber-600 hover:bg-amber-50"
+                  }`}
+                >
+                  <Shield className="h-5 w-5" />
+                  ניהול מערכת
+                </Link>
+              </li>
+            )}
           </ul>
         </nav>
 

@@ -6,7 +6,9 @@
 CREATE TABLE profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   full_name TEXT NOT NULL,
+  email TEXT,
   avatar_url TEXT,
+  is_admin BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -15,11 +17,25 @@ CREATE TABLE profiles (
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.profiles (id, full_name)
-  VALUES (NEW.id, COALESCE(NEW.raw_user_meta_data->>'full_name', ''));
+  INSERT INTO public.profiles (id, full_name, email, is_admin)
+  VALUES (
+    NEW.id,
+    COALESCE(NEW.raw_user_meta_data->>'full_name', ''),
+    NEW.email,
+    CASE WHEN NEW.email = 'imri.yadlin1@gmail.com' THEN TRUE ELSE FALSE END
+  );
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Platform admin check helper
+CREATE OR REPLACE FUNCTION is_platform_admin()
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM profiles
+    WHERE id = auth.uid() AND is_admin = TRUE
+  );
+$$ LANGUAGE sql SECURITY DEFINER;
 
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
@@ -252,6 +268,14 @@ CREATE POLICY "Household members can view each other" ON profiles
       )
     )
   );
+
+-- Platform admin: can view all profiles, households, and members
+CREATE POLICY "Admins can view all profiles" ON profiles
+  FOR SELECT USING (is_platform_admin());
+CREATE POLICY "Admins can view all households" ON households
+  FOR SELECT USING (is_platform_admin());
+CREATE POLICY "Admins can view all members" ON household_members
+  FOR SELECT USING (is_platform_admin());
 
 -- Households: members can view
 CREATE POLICY "Members can view household" ON households
