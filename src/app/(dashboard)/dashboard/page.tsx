@@ -273,7 +273,66 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* Quick Actions - top on mobile */}
+      <div className="rounded-2xl border bg-surface p-5 lg:hidden">
+        <h2 className="mb-3 font-bold">פעולות מהירות</h2>
+        <div className="grid grid-cols-2 gap-3">
+          {[
+            { label: "מטלה חדשה", href: "/chores", icon: ListChecks, color: "bg-amber-100 text-amber-600" },
+            { label: "הוצאה חדשה", href: "/expenses", icon: Wallet, color: "bg-indigo-100 text-indigo-600" },
+            { label: "פריט לקניות", href: "/shopping", icon: ShoppingCart, color: "bg-emerald-100 text-emerald-600" },
+            { label: "צמח חדש", href: "/plants", icon: Sprout, color: "bg-green-100 text-green-600" },
+          ].map((action) => {
+            const Icon = action.icon;
+            return (
+              <Link
+                key={action.label}
+                href={action.href}
+                className="flex items-center gap-3 rounded-xl border p-3.5 transition-all hover:bg-surface-dim"
+              >
+                <div
+                  className={`flex h-9 w-9 items-center justify-center rounded-lg ${action.color}`}
+                >
+                  <Icon className="h-4 w-4" />
+                </div>
+                <span className="text-sm font-medium">{action.label}</span>
+              </Link>
+            );
+          })}
+        </div>
+      </div>
+
       <div className="grid gap-6 lg:grid-cols-2">
+        {/* Chores */}
+        <div className="rounded-2xl border bg-surface p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="font-bold">מטלות</h2>
+            <Link href="/chores" className="text-sm text-primary hover:underline">
+              הכל
+            </Link>
+          </div>
+          {data.pendingChores.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted">אין מטלות עדיין</p>
+          ) : (
+            <div className="space-y-3">
+              {data.pendingChores.slice(0, 4).map((chore) => (
+                <div
+                  key={chore.id}
+                  className="flex items-center justify-between rounded-xl bg-background p-3"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="h-2.5 w-2.5 rounded-full bg-accent" />
+                    <p className="text-sm font-medium">{chore.title}</p>
+                  </div>
+                  <span className="rounded-full bg-surface-dim px-3 py-1 text-xs font-medium">
+                    {chore.assignee_name}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Recent Expenses */}
         <div className="rounded-2xl border bg-surface p-5">
           <div className="mb-4 flex items-center justify-between">
@@ -346,45 +405,15 @@ export default function DashboardPage() {
           )}
         </div>
 
-        {/* Chores */}
-        <div className="rounded-2xl border bg-surface p-5">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="font-bold">מטלות</h2>
-            <Link href="/chores" className="text-sm text-primary hover:underline">
-              הכל
-            </Link>
-          </div>
-          {data.pendingChores.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted">אין מטלות עדיין</p>
-          ) : (
-            <div className="space-y-3">
-              {data.pendingChores.slice(0, 4).map((chore) => (
-                <div
-                  key={chore.id}
-                  className="flex items-center justify-between rounded-xl bg-background p-3"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="h-2.5 w-2.5 rounded-full bg-accent" />
-                    <p className="text-sm font-medium">{chore.title}</p>
-                  </div>
-                  <span className="rounded-full bg-surface-dim px-3 py-1 text-xs font-medium">
-                    {chore.assignee_name}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Quick Actions */}
-        <div className="rounded-2xl border bg-surface p-5">
+        {/* Quick Actions - desktop only */}
+        <div className="hidden lg:block rounded-2xl border bg-surface p-5">
           <h2 className="mb-4 font-bold">פעולות מהירות</h2>
           <div className="grid grid-cols-2 gap-3">
             {[
+              { label: "מטלה חדשה", href: "/chores", icon: ListChecks, color: "bg-amber-100 text-amber-600" },
               { label: "הוצאה חדשה", href: "/expenses", icon: Wallet, color: "bg-indigo-100 text-indigo-600" },
               { label: "פריט לקניות", href: "/shopping", icon: ShoppingCart, color: "bg-emerald-100 text-emerald-600" },
               { label: "צמח חדש", href: "/plants", icon: Sprout, color: "bg-green-100 text-green-600" },
-              { label: "מטלה חדשה", href: "/chores", icon: ListChecks, color: "bg-amber-100 text-amber-600" },
             ].map((action) => {
               const Icon = action.icon;
               return (
