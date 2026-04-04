@@ -11,7 +11,6 @@ import {
   ListChecks,
   Droplets,
   BarChart3,
-  StickyNote,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -336,7 +335,6 @@ export default function DashboardPage() {
             { label: "הוצאה חדשה", href: "/expenses", icon: Wallet, color: "bg-indigo-100 text-indigo-600" },
             { label: "פריט לקניות", href: "/shopping", icon: ShoppingCart, color: "bg-emerald-100 text-emerald-600" },
             { label: "צמח חדש", href: "/plants", icon: Sprout, color: "bg-green-100 text-green-600" },
-            { label: "הודעה חדשה", href: "/notes", icon: StickyNote, color: "bg-purple-100 text-purple-600" },
           ].map((action) => {
             const Icon = action.icon;
             return (
@@ -467,7 +465,6 @@ export default function DashboardPage() {
               { label: "הוצאה חדשה", href: "/expenses", icon: Wallet, color: "bg-indigo-100 text-indigo-600" },
               { label: "פריט לקניות", href: "/shopping", icon: ShoppingCart, color: "bg-emerald-100 text-emerald-600" },
               { label: "צמח חדש", href: "/plants", icon: Sprout, color: "bg-green-100 text-green-600" },
-              { label: "הודעה חדשה", href: "/notes", icon: StickyNote, color: "bg-purple-100 text-purple-600" },
             ].map((action) => {
               const Icon = action.icon;
               return (
