@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useHousehold } from "@/hooks/use-household";
+import { useHouseholdPermissions } from "@/contexts/household-permissions-context";
 import { LoadingScreen } from "@/components/ui/loading";
+import type { FeatureKey } from "@/lib/types/database";
 import {
   Wallet,
   ShoppingCart,
@@ -30,14 +32,20 @@ interface DashboardData {
 
 export default function DashboardPage() {
   const { household, userId, user, loading: hhLoading } = useHousehold();
+  const { getLevel, loading: permLoading, permRevision, permsSnapshot } = useHouseholdPermissions();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
 
   useEffect(() => {
-    if (!household) return;
-    processRecurring().then(() => loadDashboard());
-  }, [household]);
+    if (!household || permLoading) return;
+    (async () => {
+      if (getLevel("expenses") === "edit") {
+        await processRecurring();
+      }
+      await loadDashboard();
+    })();
+  }, [household?.id, permLoading, permRevision, permsSnapshot]);
 
   async function processRecurring() {
     if (!household || !userId) return;
@@ -92,101 +100,118 @@ export default function DashboardPage() {
     setLoading(true);
     const now = new Date();
     const startOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+    const hh = household!.id;
 
-    const [expensesRes, shoppingRes, plantsRes, choresRes, recentRes, membersRes] =
-      await Promise.all([
-        supabase
-          .from("expenses")
-          .select("amount")
-          .eq("household_id", household!.id)
-          .gte("date", startOfMonth),
-        supabase
-          .from("shopping_lists")
-          .select("id")
-          .eq("household_id", household!.id)
-          .eq("is_active", true)
-          .limit(1),
-        supabase
-          .from("plants")
-          .select("id, name, location, last_watered, next_watering")
-          .eq("household_id", household!.id)
-          .lte("next_watering", new Date().toISOString().split("T")[0]),
-        supabase
-          .from("chores")
-          .select("id, title, frequency, assigned_to")
-          .eq("household_id", household!.id),
-        supabase
-          .from("expenses")
-          .select("title, amount, date, expense_categories(name)")
-          .eq("household_id", household!.id)
-          .order("date", { ascending: false })
-          .limit(5),
-        supabase
-          .from("household_members")
-          .select("user_id, profiles(full_name)")
-          .eq("household_id", household!.id),
-      ]);
+    const see = (f: FeatureKey) => getLevel(f) !== "hidden";
 
-    const memberMap: Record<string, string> = {};
-    membersRes.data?.forEach((m: any) => {
-      memberMap[m.user_id] = m.profiles?.full_name || "ללא שם";
-    });
-
+    let monthlyExpenses = 0;
     let shoppingCount = 0;
-    if (shoppingRes.data?.[0]) {
-      const { count } = await supabase
-        .from("shopping_items")
-        .select("id", { count: "exact", head: true })
-        .eq("list_id", shoppingRes.data[0].id)
-        .eq("is_checked", false);
-      shoppingCount = count || 0;
-    }
-
-    const monthlyExpenses =
-      expensesRes.data?.reduce((sum, e: any) => sum + Number(e.amount), 0) || 0;
-
+    let plantsToWater: DashboardData["plantsToWater"] = [];
+    let pendingChores: DashboardData["pendingChores"] = [];
+    let recentExpenses: DashboardData["recentExpenses"] = [];
     const trendMonths: MonthlyTotal[] = [];
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const mStart = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
-      const mEndD = new Date(d.getFullYear(), d.getMonth() + 1, 1);
-      const mEnd = `${mEndD.getFullYear()}-${String(mEndD.getMonth() + 1).padStart(2, "0")}-01`;
-      const { data: mExpenses } = await supabase
+
+    if (see("expenses")) {
+      const { data: expensesRes } = await supabase
         .from("expenses")
         .select("amount")
-        .eq("household_id", household!.id)
-        .gte("date", mStart)
-        .lt("date", mEnd);
-      trendMonths.push({
-        label: d.toLocaleDateString("he-IL", { month: "short" }),
-        total: mExpenses?.reduce((s, e: any) => s + Number(e.amount), 0) || 0,
+        .eq("household_id", hh)
+        .gte("date", startOfMonth);
+      monthlyExpenses =
+        expensesRes?.reduce((sum, e: any) => sum + Number(e.amount), 0) || 0;
+
+      const { data: recentRes } = await supabase
+        .from("expenses")
+        .select("title, amount, date, expense_categories(name)")
+        .eq("household_id", hh)
+        .order("date", { ascending: false })
+        .limit(5);
+      recentExpenses =
+        recentRes?.map((e: any) => ({
+          title: e.title,
+          amount: Number(e.amount),
+          category_name: e.expense_categories?.name || "אחר",
+          date: new Date(e.date).toLocaleDateString("he-IL"),
+        })) || [];
+
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const mStart = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+        const mEndD = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+        const mEnd = `${mEndD.getFullYear()}-${String(mEndD.getMonth() + 1).padStart(2, "0")}-01`;
+        const { data: mExpenses } = await supabase
+          .from("expenses")
+          .select("amount")
+          .eq("household_id", hh)
+          .gte("date", mStart)
+          .lt("date", mEnd);
+        trendMonths.push({
+          label: d.toLocaleDateString("he-IL", { month: "short" }),
+          total: mExpenses?.reduce((s, e: any) => s + Number(e.amount), 0) || 0,
+        });
+      }
+    }
+
+    if (see("shopping")) {
+      const { data: shoppingRes } = await supabase
+        .from("shopping_lists")
+        .select("id")
+        .eq("household_id", hh)
+        .eq("is_active", true)
+        .limit(1);
+      if (shoppingRes?.[0]) {
+        const { count } = await supabase
+          .from("shopping_items")
+          .select("id", { count: "exact", head: true })
+          .eq("list_id", shoppingRes[0].id)
+          .eq("is_checked", false);
+        shoppingCount = count || 0;
+      }
+    }
+
+    if (see("plants")) {
+      const { data: plantsRes } = await supabase
+        .from("plants")
+        .select("id, name, location, last_watered, next_watering")
+        .eq("household_id", hh)
+        .lte("next_watering", new Date().toISOString().split("T")[0]);
+      plantsToWater =
+        plantsRes?.map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          location: p.location,
+          last_watered: p.last_watered,
+        })) || [];
+    }
+
+    if (see("chores")) {
+      const { data: membersRes } = await supabase
+        .from("household_members")
+        .select("user_id, profiles(full_name)")
+        .eq("household_id", hh);
+      const memberMap: Record<string, string> = {};
+      membersRes?.forEach((m: any) => {
+        memberMap[m.user_id] = m.profiles?.full_name || "ללא שם";
       });
+      const { data: choresRes } = await supabase
+        .from("chores")
+        .select("id, title, frequency, assigned_to")
+        .eq("household_id", hh);
+      pendingChores =
+        choresRes?.map((c: any) => ({
+          id: c.id,
+          title: c.title,
+          frequency: c.frequency,
+          assignee_name: memberMap[c.assigned_to] || "לא משויך",
+        })) || [];
     }
 
     setData({
       monthlyExpenses,
       shoppingCount,
-      plantsToWater:
-        plantsRes.data?.map((p: any) => ({
-          id: p.id,
-          name: p.name,
-          location: p.location,
-          last_watered: p.last_watered,
-        })) || [],
-      pendingChores:
-        choresRes.data?.map((c: any) => ({
-          id: c.id,
-          title: c.title,
-          frequency: c.frequency,
-          assignee_name: memberMap[c.assigned_to] || "לא משויך",
-        })) || [],
-      recentExpenses:
-        recentRes.data?.map((e: any) => ({
-          title: e.title,
-          amount: Number(e.amount),
-          category_name: e.expense_categories?.name || "אחר",
-          date: new Date(e.date).toLocaleDateString("he-IL"),
-        })) || [],
+      plantsToWater,
+      pendingChores,
+      recentExpenses,
       expenseTrend: trendMonths,
     });
 
@@ -222,18 +247,24 @@ export default function DashboardPage() {
     loadDashboard();
   }
 
-  if (hhLoading || loading) return <LoadingScreen />;
+  if (hhLoading || permLoading || loading) return <LoadingScreen />;
   if (!data) return <LoadingScreen />;
 
-  const stats = [
+  const see = (f: FeatureKey) => getLevel(f) !== "hidden";
+  const canEdit = (f: FeatureKey) => getLevel(f) === "edit";
+  const maskExpenseMoney = see("expenses") && getLevel("expenses") === "view";
+
+  const statDefs = [
     {
+      feature: "expenses" as FeatureKey,
       label: "הוצאות החודש",
-      value: `₪${data.monthlyExpenses.toLocaleString()}`,
+      value: maskExpenseMoney ? "—" : `₪${data.monthlyExpenses.toLocaleString()}`,
       icon: Wallet,
       color: "bg-indigo-100 text-indigo-600",
       href: "/expenses",
     },
     {
+      feature: "chores" as FeatureKey,
       label: "מטלות",
       value: String(data.pendingChores.length),
       icon: ListChecks,
@@ -241,6 +272,7 @@ export default function DashboardPage() {
       href: "/chores",
     },
     {
+      feature: "shopping" as FeatureKey,
       label: "פריטים לקנות",
       value: String(data.shoppingCount),
       icon: ShoppingCart,
@@ -248,6 +280,7 @@ export default function DashboardPage() {
       href: "/shopping",
     },
     {
+      feature: "plants" as FeatureKey,
       label: "צמחים להשקות",
       value: String(data.plantsToWater.length),
       icon: Sprout,
@@ -255,6 +288,15 @@ export default function DashboardPage() {
       href: "/plants",
     },
   ];
+  const stats = statDefs.filter((s) => see(s.feature));
+
+  const quickDefs = [
+    { feature: "expenses" as FeatureKey, label: "הוצאה חדשה", href: "/expenses", icon: Wallet, color: "bg-indigo-100 text-indigo-600" },
+    { feature: "chores" as FeatureKey, label: "מטלה חדשה", href: "/chores", icon: ListChecks, color: "bg-amber-100 text-amber-600" },
+    { feature: "shopping" as FeatureKey, label: "פריט לקניות", href: "/shopping", icon: ShoppingCart, color: "bg-emerald-100 text-emerald-600" },
+    { feature: "plants" as FeatureKey, label: "צמח חדש", href: "/plants", icon: Sprout, color: "bg-green-100 text-green-600" },
+  ];
+  const quickActions = quickDefs.filter((a) => see(a.feature) && canEdit(a.feature));
 
   return (
     <div className="space-y-6">
@@ -266,34 +308,36 @@ export default function DashboardPage() {
       </div>
 
       {/* Stats */}
-      <div className="rounded-2xl border bg-surface p-5">
-        <h2 className="mb-3 font-bold">סיכום מצב הבית</h2>
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          {stats.map((stat) => {
-            const Icon = stat.icon;
-            return (
-              <Link
-                key={stat.label}
-                href={stat.href}
-                className="flex items-center gap-3 rounded-xl border p-3.5 transition-all hover:bg-surface-dim"
-              >
-                <div
-                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${stat.color}`}
+      {stats.length > 0 && (
+        <div className="rounded-2xl border bg-surface p-5">
+          <h2 className="mb-3 font-bold">סיכום מצב הבית</h2>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            {stats.map((stat) => {
+              const Icon = stat.icon;
+              return (
+                <Link
+                  key={stat.label}
+                  href={stat.href}
+                  className="flex items-center gap-3 rounded-xl border p-3.5 transition-all hover:bg-surface-dim"
                 >
-                  <Icon className="h-4 w-4" />
-                </div>
-                <div>
-                  <p className="text-lg font-bold">{stat.value}</p>
-                  <p className="text-xs text-muted">{stat.label}</p>
-                </div>
-              </Link>
-            );
-          })}
+                  <div
+                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${stat.color}`}
+                  >
+                    <Icon className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-lg font-bold">{stat.value}</p>
+                    <p className="text-xs text-muted">{stat.label}</p>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Expense Trend Chart */}
-      {data.expenseTrend.some((m) => m.total > 0) && (
+      {see("expenses") && data.expenseTrend.some((m) => m.total > 0) && (
         <div className="rounded-2xl border bg-surface p-5">
           <div className="mb-4 flex items-center gap-2">
             <BarChart3 className="h-5 w-5 text-muted" />
@@ -306,7 +350,7 @@ export default function DashboardPage() {
                 {data.expenseTrend.map((m, i) => (
                   <div key={i} className="flex flex-1 flex-col items-center gap-1">
                     <span className="text-xs font-semibold text-muted">
-                      {m.total > 0 ? `₪${m.total.toLocaleString()}` : ""}
+                      {!maskExpenseMoney && m.total > 0 ? `₪${m.total.toLocaleString()}` : ""}
                     </span>
                     <div className="w-full flex justify-center" style={{ height: "120px" }}>
                       <div
@@ -327,36 +371,34 @@ export default function DashboardPage() {
       )}
 
       {/* Quick Actions - top on mobile */}
-      <div className="rounded-2xl border bg-surface p-5 lg:hidden">
-        <h2 className="mb-3 font-bold">פעולות מהירות</h2>
-        <div className="grid grid-cols-2 gap-3">
-          {[
-            { label: "הוצאה חדשה", href: "/expenses", icon: Wallet, color: "bg-indigo-100 text-indigo-600" },
-            { label: "מטלה חדשה", href: "/chores", icon: ListChecks, color: "bg-amber-100 text-amber-600" },
-            { label: "פריט לקניות", href: "/shopping", icon: ShoppingCart, color: "bg-emerald-100 text-emerald-600" },
-            { label: "צמח חדש", href: "/plants", icon: Sprout, color: "bg-green-100 text-green-600" },
-          ].map((action) => {
-            const Icon = action.icon;
-            return (
-              <Link
-                key={action.label}
-                href={action.href}
-                className="flex items-center gap-3 rounded-xl border p-3.5 transition-all hover:bg-surface-dim"
-              >
-                <div
-                  className={`flex h-9 w-9 items-center justify-center rounded-lg ${action.color}`}
+      {quickActions.length > 0 && (
+        <div className="rounded-2xl border bg-surface p-5 lg:hidden">
+          <h2 className="mb-3 font-bold">פעולות מהירות</h2>
+          <div className="grid grid-cols-2 gap-3">
+            {quickActions.map((action) => {
+              const Icon = action.icon;
+              return (
+                <Link
+                  key={action.label}
+                  href={action.href}
+                  className="flex items-center gap-3 rounded-xl border p-3.5 transition-all hover:bg-surface-dim"
                 >
-                  <Icon className="h-4 w-4" />
-                </div>
-                <span className="text-sm font-medium">{action.label}</span>
-              </Link>
-            );
-          })}
+                  <div
+                    className={`flex h-9 w-9 items-center justify-center rounded-lg ${action.color}`}
+                  >
+                    <Icon className="h-4 w-4" />
+                  </div>
+                  <span className="text-sm font-medium">{action.label}</span>
+                </Link>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Chores */}
+        {see("chores") && (
         <div className="rounded-2xl border bg-surface p-5">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="font-bold">מטלות</h2>
@@ -385,8 +427,10 @@ export default function DashboardPage() {
             </div>
           )}
         </div>
+        )}
 
         {/* Recent Expenses */}
+        {see("expenses") && (
         <div className="rounded-2xl border bg-surface p-5">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="font-bold">הוצאות אחרונות</h2>
@@ -409,14 +453,18 @@ export default function DashboardPage() {
                       {expense.category_name} · {expense.date}
                     </p>
                   </div>
-                  <span className="font-semibold">₪{expense.amount.toLocaleString()}</span>
+                  <span className="font-semibold">
+                    {maskExpenseMoney ? "—" : `₪${expense.amount.toLocaleString()}`}
+                  </span>
                 </div>
               ))}
             </div>
           )}
         </div>
+        )}
 
         {/* Plants to Water */}
+        {see("plants") && (
         <div className="rounded-2xl border bg-surface p-5">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="font-bold">צמחים להשקות</h2>
@@ -444,28 +492,28 @@ export default function DashboardPage() {
                       <p className="text-xs text-muted">{plant.location || ""}</p>
                     </div>
                   </div>
-                  <button
-                    onClick={() => waterPlant(plant.id)}
-                    className="text-xs font-semibold text-primary hover:underline"
-                  >
-                    השקיתי ✓
-                  </button>
+                  {canEdit("plants") ? (
+                    <button
+                      type="button"
+                      onClick={() => waterPlant(plant.id)}
+                      className="text-xs font-semibold text-primary hover:underline"
+                    >
+                      השקיתי ✓
+                    </button>
+                  ) : null}
                 </div>
               ))}
             </div>
           )}
         </div>
+        )}
 
         {/* Quick Actions - desktop only */}
+        {quickActions.length > 0 && (
         <div className="hidden lg:block rounded-2xl border bg-surface p-5">
           <h2 className="mb-4 font-bold">פעולות מהירות</h2>
           <div className="grid grid-cols-2 gap-3">
-            {[
-              { label: "הוצאה חדשה", href: "/expenses", icon: Wallet, color: "bg-indigo-100 text-indigo-600" },
-              { label: "מטלה חדשה", href: "/chores", icon: ListChecks, color: "bg-amber-100 text-amber-600" },
-              { label: "פריט לקניות", href: "/shopping", icon: ShoppingCart, color: "bg-emerald-100 text-emerald-600" },
-              { label: "צמח חדש", href: "/plants", icon: Sprout, color: "bg-green-100 text-green-600" },
-            ].map((action) => {
+            {quickActions.map((action) => {
               const Icon = action.icon;
               return (
                 <Link
@@ -484,6 +532,7 @@ export default function DashboardPage() {
             })}
           </div>
         </div>
+        )}
       </div>
     </div>
   );

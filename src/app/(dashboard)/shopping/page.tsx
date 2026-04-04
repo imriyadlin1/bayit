@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useHousehold } from "@/hooks/use-household";
+import { FeatureGate } from "@/components/auth/FeatureGate";
 import { LoadingScreen } from "@/components/ui/loading";
 import {
   Plus,
@@ -14,7 +15,7 @@ import {
 } from "lucide-react";
 import type { ShoppingItem, ShoppingList } from "@/lib/types/database";
 
-export default function ShoppingPage() {
+function ShoppingPageInner() {
   const { household, userId, loading: hhLoading } = useHousehold();
   const [list, setList] = useState<ShoppingList | null>(null);
   const [items, setItems] = useState<ShoppingItem[]>([]);
@@ -276,5 +277,13 @@ export default function ShoppingPage() {
         </>
       )}
     </div>
+  );
+}
+
+export default function ShoppingPage() {
+  return (
+    <FeatureGate feature="shopping">
+      <ShoppingPageInner />
+    </FeatureGate>
   );
 }

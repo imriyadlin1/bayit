@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useHousehold } from "@/hooks/use-household";
+import { FeatureGate } from "@/components/auth/FeatureGate";
 import { LoadingScreen } from "@/components/ui/loading";
 import {
   Plus,
@@ -67,7 +68,7 @@ const sunlightLabels: Record<string, { label: string; icon: typeof Sun }> = {
   shade: { label: "צל", icon: Moon },
 };
 
-export default function PlantsPage() {
+function PlantsPageInner() {
   const { household, userId, loading: hhLoading } = useHousehold();
   const [plants, setPlants] = useState<Plant[]>([]);
   const [loading, setLoading] = useState(true);
@@ -436,5 +437,13 @@ export default function PlantsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function PlantsPage() {
+  return (
+    <FeatureGate feature="plants">
+      <PlantsPageInner />
+    </FeatureGate>
   );
 }

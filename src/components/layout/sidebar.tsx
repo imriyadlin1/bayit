@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { useHouseholdPermissions } from "@/contexts/household-permissions-context";
 import {
   LayoutDashboard,
   Wallet,
@@ -22,7 +23,7 @@ import {
   Plus,
   Loader2,
 } from "lucide-react";
-import type { FeatureKey, AccessLevel, Household } from "@/lib/types/database";
+import type { FeatureKey, Household } from "@/lib/types/database";
 
 interface NavItem {
   href: string;
@@ -58,16 +59,14 @@ export function Sidebar({
 }) {
   const pathname = usePathname();
   const [isAdmin, setIsAdmin] = useState(false);
-  const [permissions, setPermissions] = useState<Record<string, AccessLevel>>({});
-  const [isHouseholdAdmin, setIsHouseholdAdmin] = useState(false);
+  const { getLevel, isHouseholdAdmin } = useHouseholdPermissions();
   const [showSwitcher, setShowSwitcher] = useState(false);
   const [creatingPersonal, setCreatingPersonal] = useState(false);
 
   useEffect(() => {
     const supabase = createClient();
     supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user || !activeSpace) return;
-
+      if (!user) return;
       supabase
         .from("profiles")
         .select("is_admin")
@@ -76,36 +75,13 @@ export function Sidebar({
         .then(({ data }) => {
           if (data?.is_admin) setIsAdmin(true);
         });
-
-      supabase
-        .from("household_members")
-        .select("role")
-        .eq("household_id", activeSpace.id)
-        .eq("user_id", user.id)
-        .single()
-        .then(({ data }) => {
-          setIsHouseholdAdmin(data?.role === "admin");
-        });
-
-      supabase
-        .from("member_permissions")
-        .select("feature, access_level")
-        .eq("household_id", activeSpace.id)
-        .eq("user_id", user.id)
-        .then(({ data }) => {
-          const map: Record<string, AccessLevel> = {};
-          data?.forEach((p: any) => { map[p.feature] = p.access_level; });
-          setPermissions(map);
-        });
     });
-  }, [activeSpace?.id]);
+  }, []);
 
   function canSee(feature?: FeatureKey): boolean {
     if (!feature) return true;
     if (isHouseholdAdmin) return true;
-    const level = permissions[feature];
-    if (!level || level === "edit" || level === "view") return true;
-    return false;
+    return getLevel(feature) !== "hidden";
   }
 
   async function createPersonalSpace() {

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useHousehold } from "@/hooks/use-household";
+import { FeatureGate } from "@/components/auth/FeatureGate";
 import { LoadingScreen } from "@/components/ui/loading";
 import {
   Plus,
@@ -49,7 +50,7 @@ function getDueStatus(item: MaintenanceItem): "ok" | "soon" | "overdue" {
   return "ok";
 }
 
-export default function MaintenancePage() {
+function MaintenancePageInner() {
   const { household, userId, loading: hhLoading } = useHousehold();
   const [items, setItems] = useState<MaintenanceItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -482,5 +483,13 @@ export default function MaintenancePage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function MaintenancePage() {
+  return (
+    <FeatureGate feature="maintenance">
+      <MaintenancePageInner />
+    </FeatureGate>
   );
 }

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useHousehold } from "@/hooks/use-household";
+import { FeatureGate } from "@/components/auth/FeatureGate";
 import { LoadingScreen } from "@/components/ui/loading";
 import {
   Plus,
@@ -21,7 +22,7 @@ import {
 } from "lucide-react";
 import type { Expense, ExpenseCategory, Budget } from "@/lib/types/database";
 
-export default function ExpensesPage() {
+function ExpensesPageInner() {
   const { household, userId, loading: hhLoading } = useHousehold();
   const [expenses, setExpenses] = useState<(Expense & { category?: ExpenseCategory; added_by_name?: string })[]>([]);
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
@@ -705,5 +706,13 @@ export default function ExpensesPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function ExpensesPage() {
+  return (
+    <FeatureGate feature="expenses">
+      <ExpensesPageInner />
+    </FeatureGate>
   );
 }

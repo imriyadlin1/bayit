@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useHousehold } from "@/hooks/use-household";
+import { FeatureGate } from "@/components/auth/FeatureGate";
 import { LoadingScreen } from "@/components/ui/loading";
 import {
   Plus,
@@ -29,7 +30,7 @@ const CATEGORIES = [
   "אחר",
 ];
 
-export default function InventoryPage() {
+function InventoryPageInner() {
   const { household, userId, loading: hhLoading } = useHousehold();
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -466,5 +467,13 @@ export default function InventoryPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function InventoryPage() {
+  return (
+    <FeatureGate feature="inventory">
+      <InventoryPageInner />
+    </FeatureGate>
   );
 }

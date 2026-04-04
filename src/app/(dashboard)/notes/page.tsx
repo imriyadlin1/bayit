@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useHousehold } from "@/hooks/use-household";
+import { FeatureGate } from "@/components/auth/FeatureGate";
 import { LoadingScreen } from "@/components/ui/loading";
 import {
   Plus,
@@ -24,7 +25,7 @@ const NOTE_COLORS = [
   { value: "#f3e8ff", label: "סגול", bg: "bg-purple-100" },
 ];
 
-export default function NotesPage() {
+function NotesPageInner() {
   const { household, userId, loading: hhLoading } = useHousehold();
   const [notes, setNotes] = useState<(HouseholdNote & { author_name?: string })[]>([]);
   const [loading, setLoading] = useState(true);
@@ -273,5 +274,13 @@ export default function NotesPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function NotesPage() {
+  return (
+    <FeatureGate feature="notes">
+      <NotesPageInner />
+    </FeatureGate>
   );
 }

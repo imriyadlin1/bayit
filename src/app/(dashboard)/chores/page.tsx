@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useHousehold } from "@/hooks/use-household";
+import { FeatureGate } from "@/components/auth/FeatureGate";
 import { LoadingScreen } from "@/components/ui/loading";
 import {
   Plus,
@@ -26,7 +27,7 @@ const frequencyLabels: Record<string, string> = {
   once: "חד פעמי",
 };
 
-export default function ChoresPage() {
+function ChoresPageInner() {
   const { household, userId, user, loading: hhLoading } = useHousehold();
   const [chores, setChores] = useState<(Chore & { completions?: ChoreCompletion[]; assignee_name?: string })[]>([]);
   const [members, setMembers] = useState<{ user_id: string; name: string }[]>([]);
@@ -438,5 +439,13 @@ export default function ChoresPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function ChoresPage() {
+  return (
+    <FeatureGate feature="chores">
+      <ChoresPageInner />
+    </FeatureGate>
   );
 }
