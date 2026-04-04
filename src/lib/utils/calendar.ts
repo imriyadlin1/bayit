@@ -17,16 +17,16 @@ export function googleCalendarUrl({
   const d = date.replace(/-/g, "");
   const endD = allDay ? nextDay(date).replace(/-/g, "") : d;
 
-  const params = new URLSearchParams({
-    action: "TEMPLATE",
-    text: title,
-    dates: `${d}/${endD}`,
-  });
+  let url =
+    `https://calendar.google.com/calendar/render` +
+    `?action=TEMPLATE` +
+    `&text=${encodeURIComponent(title)}` +
+    `&dates=${d}/${endD}`;
 
-  if (details) params.set("details", details);
-  if (recurrence) params.set("recur", `RRULE:FREQ=${recurrence}`);
+  if (details) url += `&details=${encodeURIComponent(details)}`;
+  if (recurrence) url += `&recur=RRULE:FREQ=${recurrence}`;
 
-  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+  return url;
 }
 
 function nextDay(dateStr: string): string {
