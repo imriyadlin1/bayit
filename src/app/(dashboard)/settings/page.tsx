@@ -20,7 +20,7 @@ import {
   Shield,
   Eye,
   EyeOff,
-  Lock,
+  UserMinus,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { FeatureKey, AccessLevel } from "@/lib/types/database";
@@ -53,6 +53,8 @@ export default function SettingsPage() {
   const [editingPerms, setEditingPerms] = useState<string | null>(null);
   const [memberPerms, setMemberPerms] = useState<Record<string, Record<FeatureKey, AccessLevel>>>({});
   const [savingPerms, setSavingPerms] = useState(false);
+  const [removeTarget, setRemoveTarget] = useState<{ user_id: string; name: string } | null>(null);
+  const [removing, setRemoving] = useState(false);
   const supabase = createClient();
   const router = useRouter();
 
@@ -134,6 +136,35 @@ export default function SettingsPage() {
 
     setSavingPerms(false);
     setEditingPerms(null);
+  }
+
+  async function removeMemberFromHousehold() {
+    if (!household || !removeTarget) return;
+    const uid = removeTarget.user_id;
+    setRemoving(true);
+    const { error: permErr } = await supabase
+      .from("member_permissions")
+      .delete()
+      .eq("household_id", household.id)
+      .eq("user_id", uid);
+
+    const { error } = await supabase
+      .from("household_members")
+      .delete()
+      .eq("household_id", household.id)
+      .eq("user_id", uid);
+
+    setRemoving(false);
+    if (permErr || error) {
+      alert(
+        (error || permErr)?.message || "לא ניתן להסיר את החבר. נסו שוב."
+      );
+      return;
+    }
+    setRemoveTarget(null);
+    if (editingPerms === uid) setEditingPerms(null);
+    await loadMembers();
+    await loadPermissions();
   }
 
   async function copyInviteCode() {
@@ -243,7 +274,7 @@ export default function SettingsPage() {
           <div className="space-y-2">
             {members.map((member) => (
               <div key={member.user_id}>
-                <div className="flex items-center justify-between rounded-xl bg-background p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-background p-3">
                   <div className="flex items-center gap-3">
                     <UserCircle className="h-8 w-8 text-muted" />
                     <div>
@@ -257,13 +288,24 @@ export default function SettingsPage() {
                     </div>
                   </div>
                   {isHouseholdAdmin && member.role !== "admin" && (
-                    <button
-                      onClick={() => setEditingPerms(editingPerms === member.user_id ? null : member.user_id)}
-                      className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium text-muted hover:bg-surface-dim transition-colors"
-                    >
-                      <Shield className="h-3.5 w-3.5" />
-                      הרשאות
-                    </button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setEditingPerms(editingPerms === member.user_id ? null : member.user_id)}
+                        className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium text-muted hover:bg-surface-dim transition-colors"
+                      >
+                        <Shield className="h-3.5 w-3.5" />
+                        הרשאות
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRemoveTarget({ user_id: member.user_id, name: member.name })}
+                        className="flex items-center gap-1.5 rounded-lg border border-danger/25 px-3 py-1.5 text-xs font-medium text-danger hover:bg-danger/5 transition-colors"
+                      >
+                        <UserMinus className="h-3.5 w-3.5" />
+                        הסר מבית
+                      </button>
+                    </div>
                   )}
                 </div>
 
@@ -373,6 +415,37 @@ export default function SettingsPage() {
         <LogOut className="h-4 w-4" />
         התנתקות
       </button>
+
+      {removeTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl border bg-surface p-5 shadow-xl">
+            <h3 className="text-lg font-bold">הסרת חבר מבית</h3>
+            <p className="mt-2 text-sm text-muted">
+              להסיר את <span className="font-medium text-foreground">{removeTarget.name}</span> ממשק הבית?
+              החשבון שלהם יישאר קיים, והם לא יראו יותר את הנתונים של הבית הזה.
+            </p>
+            <div className="mt-5 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setRemoveTarget(null)}
+                disabled={removing}
+                className="flex-1 rounded-xl border py-2.5 text-sm font-medium hover:bg-surface-dim disabled:opacity-50"
+              >
+                ביטול
+              </button>
+              <button
+                type="button"
+                onClick={removeMemberFromHousehold}
+                disabled={removing}
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-danger py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+              >
+                {removing ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                {removing ? "מסירים..." : "הסרה"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
