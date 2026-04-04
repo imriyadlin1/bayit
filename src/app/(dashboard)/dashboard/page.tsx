@@ -217,28 +217,31 @@ export default function DashboardPage() {
         <p className="text-muted">הנה סיכום מצב הבית שלכם</p>
       </div>
 
-      {/* Stats - compact grid on mobile, wide cards on desktop */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
-        {stats.map((stat) => {
-          const Icon = stat.icon;
-          return (
-            <Link
-              key={stat.label}
-              href={stat.href}
-              className="group flex items-center gap-3 rounded-xl border bg-surface p-3.5 transition-all hover:shadow-md hover:shadow-black/5 lg:flex-col lg:items-start lg:gap-0 lg:rounded-2xl lg:p-5"
-            >
-              <div
-                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg lg:mb-3 lg:h-10 lg:w-10 lg:rounded-xl ${stat.color}`}
+      {/* Stats */}
+      <div className="rounded-2xl border bg-surface p-5">
+        <h2 className="mb-3 font-bold">סיכום מצב הבית</h2>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {stats.map((stat) => {
+            const Icon = stat.icon;
+            return (
+              <Link
+                key={stat.label}
+                href={stat.href}
+                className="flex items-center gap-3 rounded-xl border p-3.5 transition-all hover:bg-surface-dim"
               >
-                <Icon className="h-4 w-4 lg:h-5 lg:w-5" />
-              </div>
-              <div>
-                <p className="text-lg font-bold lg:text-2xl">{stat.value}</p>
-                <p className="text-xs text-muted lg:text-sm">{stat.label}</p>
-              </div>
-            </Link>
-          );
-        })}
+                <div
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${stat.color}`}
+                >
+                  <Icon className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-lg font-bold">{stat.value}</p>
+                  <p className="text-xs text-muted">{stat.label}</p>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
       </div>
 
       {/* Expense Trend Chart */}
