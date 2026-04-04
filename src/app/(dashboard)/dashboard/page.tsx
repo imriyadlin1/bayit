@@ -234,6 +234,13 @@ export default function DashboardPage() {
       href: "/expenses",
     },
     {
+      label: "מטלות",
+      value: String(data.pendingChores.length),
+      icon: ListChecks,
+      color: "bg-amber-100 text-amber-600",
+      href: "/chores",
+    },
+    {
       label: "פריטים לקנות",
       value: String(data.shoppingCount),
       icon: ShoppingCart,
@@ -246,13 +253,6 @@ export default function DashboardPage() {
       icon: Sprout,
       color: "bg-green-100 text-green-600",
       href: "/plants",
-    },
-    {
-      label: "מטלות",
-      value: String(data.pendingChores.length),
-      icon: ListChecks,
-      color: "bg-amber-100 text-amber-600",
-      href: "/chores",
     },
   ];
 
@@ -331,8 +331,8 @@ export default function DashboardPage() {
         <h2 className="mb-3 font-bold">פעולות מהירות</h2>
         <div className="grid grid-cols-2 gap-3">
           {[
-            { label: "מטלה חדשה", href: "/chores", icon: ListChecks, color: "bg-amber-100 text-amber-600" },
             { label: "הוצאה חדשה", href: "/expenses", icon: Wallet, color: "bg-indigo-100 text-indigo-600" },
+            { label: "מטלה חדשה", href: "/chores", icon: ListChecks, color: "bg-amber-100 text-amber-600" },
             { label: "פריט לקניות", href: "/shopping", icon: ShoppingCart, color: "bg-emerald-100 text-emerald-600" },
             { label: "צמח חדש", href: "/plants", icon: Sprout, color: "bg-green-100 text-green-600" },
           ].map((action) => {
@@ -461,8 +461,8 @@ export default function DashboardPage() {
           <h2 className="mb-4 font-bold">פעולות מהירות</h2>
           <div className="grid grid-cols-2 gap-3">
             {[
-              { label: "מטלה חדשה", href: "/chores", icon: ListChecks, color: "bg-amber-100 text-amber-600" },
               { label: "הוצאה חדשה", href: "/expenses", icon: Wallet, color: "bg-indigo-100 text-indigo-600" },
+              { label: "מטלה חדשה", href: "/chores", icon: ListChecks, color: "bg-amber-100 text-amber-600" },
               { label: "פריט לקניות", href: "/shopping", icon: ShoppingCart, color: "bg-emerald-100 text-emerald-600" },
               { label: "צמח חדש", href: "/plants", icon: Sprout, color: "bg-green-100 text-green-600" },
             ].map((action) => {
