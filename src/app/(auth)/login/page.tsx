@@ -1,104 +1,150 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Loader2, Home, Mail, Lock } from "lucide-react";
+import { Suspense, useEffect, useState } from "react";
+import { AuthToast, type AuthToastVariant } from "@/components/auth/AuthToast";
+import { safeNextPath } from "@/lib/auth/safeNext";
+import { loginErrorToHebrew } from "@/lib/auth/auth-errors";
 import { createClient } from "@/lib/supabase/client";
-import { Home, Mail, Lock, Loader2 } from "lucide-react";
 
-export default function LoginPage() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+function LoginForm() {
   const router = useRouter();
+  const params = useSearchParams();
+  const next = safeNextPath(params.get("next"));
+  const signupHref = `/register?next=${encodeURIComponent(next)}`;
+  const emailFromUrl = params.get("email") ?? "";
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
+  const [email, setEmail] = useState(emailFromUrl);
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [toast, setToast] = useState<{ msg: string; variant: AuthToastVariant } | null>(null);
 
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (error) {
-      setError("אימייל או סיסמה לא נכונים");
-      setLoading(false);
-      return;
+  useEffect(() => {
+    const err = params.get("error");
+    if (err === "auth") {
+      setToast({
+        msg: "הקישור מהמייל לא יצר חיבור אוטומטי. הקלידו את הסיסמה כדי להיכנס.",
+        variant: "info",
+      });
     }
+  }, [params]);
 
-    router.push("/dashboard");
-    router.refresh();
-  };
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (loading) return;
+    setLoading(true);
+    setToast(null);
+    try {
+      const supabase = createClient();
+      const { error: err } = await supabase.auth.signInWithPassword({ email, password });
+      if (err) {
+        setToast({ msg: loginErrorToHebrew(err.message), variant: "error" });
+        return;
+      }
+      router.push(next);
+      router.refresh();
+    } catch {
+      setToast({ msg: "משהו השתבש. נסו שוב בעוד רגע.", variant: "error" });
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
-    <div className="rounded-2xl bg-surface p-8 shadow-xl shadow-black/5">
-      <div className="mb-8 text-center">
-        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-white">
-          <Home className="h-7 w-7" />
+    <>
+      <AuthToast
+        message={toast?.msg ?? null}
+        variant={toast?.variant ?? "error"}
+        onDismiss={() => setToast(null)}
+      />
+
+      <div className="rounded-2xl bg-surface p-8 shadow-xl shadow-black/5">
+        <div className="mb-8 text-center">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-white">
+            <Home className="h-7 w-7" />
+          </div>
+          <h1 className="text-2xl font-bold">ברוכים השבים</h1>
+          <p className="mt-1 text-muted">הכנסו עם האימייל והסיסמה שלכם</p>
         </div>
-        <h1 className="text-2xl font-bold">ברוכים הבאים</h1>
-        <p className="mt-1 text-muted">התחברו לחשבון שלכם</p>
+
+        <div className="mb-5 rounded-xl border bg-surface-dim px-4 py-3 text-xs font-medium leading-relaxed text-muted">
+          נרשמתם לאחרונה? <strong className="text-foreground">קודם לחצו על הקישור במייל</strong> — בלי
+          אישור לא ניתן להיכנס.
+        </div>
+
+        <form onSubmit={onSubmit} className="space-y-4" aria-busy={loading}>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium">אימייל</label>
+            <div className="relative">
+              <Mail className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+              <input
+                type="email"
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                className="w-full rounded-xl border bg-background py-3 pr-10 pl-4 text-sm transition-colors"
+                required
+                disabled={loading}
+                dir="ltr"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-sm font-medium">סיסמה</label>
+            <div className="relative">
+              <Lock className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+              <input
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full rounded-xl border bg-background py-3 pr-10 pl-4 text-sm transition-colors"
+                required
+                disabled={loading}
+                dir="ltr"
+              />
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-semibold text-white transition-colors hover:bg-primary-dark disabled:opacity-60"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                נכנסים...
+              </>
+            ) : (
+              "כניסה"
+            )}
+          </button>
+        </form>
+
+        <p className="mt-6 text-center text-sm text-muted">
+          עדיין אין חשבון?{" "}
+          <Link href={signupHref} className="font-semibold text-primary hover:underline">
+            הרשמה
+          </Link>
+        </p>
       </div>
+    </>
+  );
+}
 
-      <form onSubmit={handleLogin} className="space-y-4">
-        <div>
-          <label className="mb-1.5 block text-sm font-medium">אימייל</label>
-          <div className="relative">
-            <Mail className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="name@example.com"
-              className="w-full rounded-xl border bg-background py-3 pr-10 pl-4 text-sm transition-colors"
-              required
-              dir="ltr"
-            />
-          </div>
-        </div>
-
-        <div>
-          <label className="mb-1.5 block text-sm font-medium">סיסמה</label>
-          <div className="relative">
-            <Lock className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              className="w-full rounded-xl border bg-background py-3 pr-10 pl-4 text-sm transition-colors"
-              required
-              dir="ltr"
-            />
-          </div>
-        </div>
-
-        {error && (
-          <p className="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">
-            {error}
-          </p>
-        )}
-
-        <button
-          type="submit"
-          disabled={loading}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-semibold text-white transition-colors hover:bg-primary-dark disabled:opacity-60"
-        >
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-          {loading ? "מתחבר..." : "התחברות"}
-        </button>
-      </form>
-
-      <p className="mt-6 text-center text-sm text-muted">
-        אין לכם חשבון?{" "}
-        <Link href="/register" className="font-semibold text-primary hover:underline">
-          הרשמה
-        </Link>
-      </p>
-    </div>
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="rounded-2xl bg-surface p-8 text-center text-muted shadow-xl">טוען...</div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }
