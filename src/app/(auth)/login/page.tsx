@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2, Home, Mail, Lock } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
 import { AuthToast, type AuthToastVariant } from "@/components/auth/AuthToast";
+import { GoogleLoginButton } from "@/components/auth/GoogleLoginButton";
 import { safeNextPath } from "@/lib/auth/safeNext";
 import { loginErrorToHebrew } from "@/lib/auth/auth-errors";
 import { createClient } from "@/lib/supabase/client";
@@ -125,6 +126,17 @@ function LoginForm() {
             )}
           </button>
         </form>
+
+        <div className="relative my-6">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t" />
+          </div>
+          <div className="relative flex justify-center text-xs">
+            <span className="bg-surface px-3 text-muted">או</span>
+          </div>
+        </div>
+
+        <GoogleLoginButton next={next} />
 
         <p className="mt-6 text-center text-sm text-muted">
           עדיין אין חשבון?{" "}
