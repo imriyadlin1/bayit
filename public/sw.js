@@ -1,12 +1,7 @@
-const CACHE_NAME = "bayit-v1";
+const CACHE_NAME = "bayit-v2";
 const OFFLINE_URL = "/offline";
 
-const PRECACHE_URLS = [
-  "/",
-  "/dashboard",
-  "/icon-192.png",
-  "/icon-512.png",
-];
+const PRECACHE_URLS = ["/", "/dashboard", "/icon", "/apple-icon"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -51,8 +46,8 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
-      icon: "/icon-192.png",
-      badge: "/icon-192.png",
+      icon: "/apple-icon",
+      badge: "/apple-icon",
       dir: "rtl",
       lang: "he",
       data: { url: data.url || "/dashboard" },
