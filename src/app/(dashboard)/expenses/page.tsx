@@ -21,12 +21,13 @@ import {
   PieChart,
   Users,
   Check,
+  Pencil,
 } from "lucide-react";
 import type { Expense, ExpenseCategory, Budget } from "@/lib/types/database";
 import { sortExpenseCategoriesForDisplay } from "@/lib/expense-category-sort";
 
 function ExpensesPageInner() {
-  const { household, userId, loading: hhLoading } = useHousehold();
+  const { household, userId, loading: hhLoading, isPersonal } = useHousehold();
   const { canEdit } = useHouseholdPermissions();
   const canMutate = canEdit("expenses");
   const [expenses, setExpenses] = useState<(Expense & { category?: ExpenseCategory; added_by_name?: string })[]>([]);
@@ -56,6 +57,13 @@ function ExpensesPageInner() {
   const [budgetCatId, setBudgetCatId] = useState("");
   const [budgetAmount, setBudgetAmount] = useState("");
   const [savingBudget, setSavingBudget] = useState(false);
+
+  const [editingExpenseCatId, setEditingExpenseCatId] = useState<string | null>(null);
+  const [editExpenseCatDraft, setEditExpenseCatDraft] = useState("");
+  const [savingExpenseCatId, setSavingExpenseCatId] = useState<string | null>(null);
+  const [deletingExpenseCatId, setDeletingExpenseCatId] = useState<string | null>(null);
+  const [newExpenseCatName, setNewExpenseCatName] = useState("");
+  const [addingExpenseCat, setAddingExpenseCat] = useState(false);
 
   const supabase = createClient();
 
@@ -120,6 +128,108 @@ function ExpensesPageInner() {
       );
     }
     setLoading(false);
+  }
+
+  function cancelEditExpenseCat() {
+    setEditingExpenseCatId(null);
+    setEditExpenseCatDraft("");
+  }
+
+  function startEditExpenseCat(cat: ExpenseCategory) {
+    setEditingExpenseCatId(cat.id);
+    setEditExpenseCatDraft(cat.name);
+  }
+
+  async function saveEditExpenseCat(catId: string) {
+    if (!canMutate || !household || isPersonal) return;
+    const name = editExpenseCatDraft.trim();
+    if (!name) {
+      alert("שם קטגוריה לא יכול להיות ריק.");
+      return;
+    }
+    if (
+      categories.some((c) => c.id !== catId && c.name.trim() === name)
+    ) {
+      alert("כבר קיימת קטגוריה בשם הזה.");
+      return;
+    }
+    setSavingExpenseCatId(catId);
+    const { error } = await supabase
+      .from("expense_categories")
+      .update({ name, is_default: false })
+      .eq("id", catId)
+      .eq("household_id", household.id);
+    setSavingExpenseCatId(null);
+    if (error) {
+      alert(error.message || "לא ניתן לעדכן את השם.");
+      return;
+    }
+    cancelEditExpenseCat();
+    await loadData();
+  }
+
+  async function addExpenseCategory() {
+    if (!canMutate || !household || isPersonal) return;
+    const name = newExpenseCatName.trim();
+    if (!name) return;
+    if (categories.some((c) => c.name.trim() === name)) {
+      alert("כבר קיימת קטגוריה בשם הזה.");
+      return;
+    }
+    setAddingExpenseCat(true);
+    const maxOrder = categories.reduce(
+      (m, c) => Math.max(m, c.sort_order ?? 0),
+      0
+    );
+    const { error } = await supabase.from("expense_categories").insert({
+      household_id: household.id,
+      name,
+      icon: "Tag",
+      color: "#6366f1",
+      is_default: false,
+      sort_order: maxOrder + 1,
+    });
+    setAddingExpenseCat(false);
+    if (error) {
+      alert(error.message || "לא ניתן להוסיף קטגוריה.");
+      return;
+    }
+    setNewExpenseCatName("");
+    await loadData();
+  }
+
+  async function removeExpenseCategory(cat: ExpenseCategory) {
+    if (!canMutate || !household || isPersonal) return;
+    const { count, error: cntErr } = await supabase
+      .from("expenses")
+      .select("id", { count: "exact", head: true })
+      .eq("household_id", household.id)
+      .eq("category_id", cat.id);
+    if (cntErr) {
+      alert(cntErr.message || "שגיאה בבדיקה.");
+      return;
+    }
+    if (count && count > 0) {
+      alert(
+        "לא ניתן למחוק — יש הוצאות משויכות לקטגוריה. שייכו אותן לקטגוריה אחרת ונסו שוב."
+      );
+      return;
+    }
+    if (!confirm(`למחוק את הקטגוריה «${cat.name}»?`)) return;
+    setDeletingExpenseCatId(cat.id);
+    const { error } = await supabase
+      .from("expense_categories")
+      .delete()
+      .eq("id", cat.id)
+      .eq("household_id", household.id);
+    setDeletingExpenseCatId(null);
+    if (error) {
+      alert(error.message || "לא ניתן למחוק.");
+      return;
+    }
+    if (filterCat === cat.id) setFilterCat("all");
+    if (editingExpenseCatId === cat.id) cancelEditExpenseCat();
+    await loadData();
   }
 
   async function handleAdd(e: React.FormEvent) {
@@ -381,6 +491,129 @@ function ExpensesPageInner() {
           </button>
         ))}
       </div>
+
+      {/* ניהול קטגוריות (משק בית בלבד) */}
+      {canMutate && !isPersonal && (
+        <div className="rounded-2xl border bg-surface p-5">
+          <h2 className="mb-1 font-bold">ניהול קטגוריות</h2>
+          <p className="mb-4 text-xs text-muted">
+            עריכת שם, מחיקה (רק בלי הוצאות משויכות), והוספת קטגוריה חדשה.
+          </p>
+          <ul className="mb-4 space-y-1.5 rounded-xl bg-background p-3">
+            {categoriesOrdered.map((cat) => (
+              <li
+                key={cat.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-sm"
+              >
+                {editingExpenseCatId === cat.id ? (
+                  <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                    <span
+                      className="h-2.5 w-2.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: cat.color || "#737373" }}
+                    />
+                    <input
+                      type="text"
+                      value={editExpenseCatDraft}
+                      onChange={(e) => setEditExpenseCatDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") void saveEditExpenseCat(cat.id);
+                        if (e.key === "Escape") cancelEditExpenseCat();
+                      }}
+                      className="min-w-[8rem] flex-1 rounded-lg border bg-surface px-2 py-1 text-sm"
+                      autoFocus
+                      disabled={savingExpenseCatId === cat.id}
+                    />
+                    <div className="flex shrink-0 items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => saveEditExpenseCat(cat.id)}
+                        disabled={savingExpenseCatId === cat.id}
+                        className="rounded-lg bg-primary p-1.5 text-white hover:bg-primary-dark disabled:opacity-50"
+                        title="שמירה"
+                      >
+                        {savingExpenseCatId === cat.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Check className="h-4 w-4" />
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={cancelEditExpenseCat}
+                        disabled={savingExpenseCatId === cat.id}
+                        className="rounded-lg border p-1.5 text-muted hover:bg-surface-dim disabled:opacity-50"
+                        title="ביטול"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span
+                        className="h-2.5 w-2.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: cat.color || "#737373" }}
+                      />
+                      <span className="truncate font-medium">{cat.name}</span>
+                    </span>
+                    <div className="flex shrink-0 items-center gap-0.5">
+                      <button
+                        type="button"
+                        onClick={() => startEditExpenseCat(cat)}
+                        className="rounded-lg p-1.5 text-muted hover:bg-surface-dim"
+                        title="עריכת שם"
+                        aria-label={`עריכת ${cat.name}`}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeExpenseCategory(cat)}
+                        disabled={deletingExpenseCatId === cat.id}
+                        className="rounded-lg p-1.5 text-muted hover:bg-danger/10 hover:text-danger disabled:opacity-50"
+                        title="מחיקת קטגוריה"
+                        aria-label={`מחיקת ${cat.name}`}
+                      >
+                        {deletingExpenseCatId === cat.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <input
+              type="text"
+              value={newExpenseCatName}
+              onChange={(e) => setNewExpenseCatName(e.target.value)}
+              onKeyDown={(e) =>
+                e.key === "Enter" && !addingExpenseCat && void addExpenseCategory()
+              }
+              placeholder="שם קטגוריה חדשה"
+              className="min-w-0 flex-1 rounded-xl border bg-background px-3 py-2 text-sm"
+            />
+            <button
+              type="button"
+              onClick={() => void addExpenseCategory()}
+              disabled={addingExpenseCat || !newExpenseCatName.trim()}
+              className="flex shrink-0 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-dark disabled:opacity-50"
+            >
+              {addingExpenseCat ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Plus className="h-4 w-4" />
+              )}
+              הוספת קטגוריה
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Expenses List */}
       {loading ? (
