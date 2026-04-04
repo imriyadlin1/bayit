@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useHousehold } from "@/hooks/use-household";
+import { useHouseholdPermissions } from "@/contexts/household-permissions-context";
 import { FeatureGate } from "@/components/auth/FeatureGate";
 import { LoadingScreen } from "@/components/ui/loading";
+import { ViewOnlyBanner } from "@/components/ui/view-only-banner";
 import {
   Plus,
   X,
@@ -24,6 +26,9 @@ import type { Expense, ExpenseCategory, Budget } from "@/lib/types/database";
 
 function ExpensesPageInner() {
   const { household, userId, loading: hhLoading } = useHousehold();
+  const { canEdit, getLevel } = useHouseholdPermissions();
+  const canMutate = canEdit("expenses");
+  const maskMoney = getLevel("expenses") === "view";
   const [expenses, setExpenses] = useState<(Expense & { category?: ExpenseCategory; added_by_name?: string })[]>([]);
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
@@ -112,7 +117,7 @@ function ExpensesPageInner() {
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
-    if (!household || !userId) return;
+    if (!canMutate || !household || !userId) return;
     setSaving(true);
 
     const { data: newExpense } = await supabase.from("expenses").insert({
@@ -152,13 +157,14 @@ function ExpensesPageInner() {
   }
 
   async function handleDelete(id: string) {
+    if (!canMutate) return;
     await supabase.from("expenses").delete().eq("id", id);
     setExpenses((prev) => prev.filter((e) => e.id !== id));
   }
 
   async function handleSaveBudget(e: React.FormEvent) {
     e.preventDefault();
-    if (!household || !userId) return;
+    if (!canMutate || !household || !userId) return;
     setSavingBudget(true);
 
     const existing = budgets.find((b) => b.category_id === (budgetCatId || null));
@@ -186,7 +192,7 @@ function ExpensesPageInner() {
     const headers = ["תיאור", "סכום", "קטגוריה", "תאריך", "הערות", "חוזר"];
     const rows = expenses.map((e) => [
       e.title,
-      Number(e.amount),
+      maskMoney ? "—" : Number(e.amount),
       e.category?.name || "ללא קטגוריה",
       e.date,
       e.notes || "",
@@ -266,6 +272,7 @@ function ExpensesPageInner() {
 
   return (
     <div className="space-y-6">
+      {!canMutate && <ViewOnlyBanner />}
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -282,20 +289,24 @@ function ExpensesPageInner() {
               ייצוא
             </button>
           )}
-          <button
-            onClick={() => setShowBudgetForm(true)}
-            className="flex items-center gap-2 rounded-xl border border-primary/20 bg-primary/5 px-4 py-2.5 text-sm font-medium text-primary hover:bg-primary/10 transition-colors"
-          >
-            <Target className="h-4 w-4" />
-            תקציב
-          </button>
-          <button
-            onClick={() => setShowForm(true)}
-            className="flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark transition-colors"
-          >
-            <Plus className="h-4 w-4" />
-            הוצאה חדשה
-          </button>
+          {canMutate && (
+            <>
+              <button
+                onClick={() => setShowBudgetForm(true)}
+                className="flex items-center gap-2 rounded-xl border border-primary/20 bg-primary/5 px-4 py-2.5 text-sm font-medium text-primary hover:bg-primary/10 transition-colors"
+              >
+                <Target className="h-4 w-4" />
+                תקציב
+              </button>
+              <button
+                onClick={() => setShowForm(true)}
+                className="flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark transition-colors"
+              >
+                <Plus className="h-4 w-4" />
+                הוצאה חדשה
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -312,8 +323,8 @@ function ExpensesPageInner() {
         </div>
         <div className="text-left">
           <p className="text-sm text-muted">סה״כ החודש</p>
-          <p className="text-2xl font-bold">₪{totalMonth.toLocaleString()}</p>
-          {totalBudget > 0 && (
+          <p className="text-2xl font-bold">{maskMoney ? "—" : `₪${totalMonth.toLocaleString()}`}</p>
+          {!maskMoney && totalBudget > 0 && (
             <div className="mt-1">
               <div className="flex items-center gap-2 text-xs">
                 <span className="text-muted">מתוך תקציב ₪{totalBudget.toLocaleString()}</span>
@@ -365,7 +376,9 @@ function ExpensesPageInner() {
         <div className="rounded-2xl border bg-surface p-12 text-center">
           <Wallet className="mx-auto mb-3 h-10 w-10 text-muted" />
           <p className="font-medium">אין הוצאות החודש</p>
-          <p className="mt-1 text-sm text-muted">לחצו על ״הוצאה חדשה״ להוסיף</p>
+          <p className="mt-1 text-sm text-muted">
+            {canMutate ? "לחצו על ״הוצאה חדשה״ להוסיף" : "אין נתונים להצגה בחודש זה"}
+          </p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -391,14 +404,16 @@ function ExpensesPageInner() {
               </div>
               <div className="flex items-center gap-3">
                 <span className="text-lg font-bold">
-                  ₪{Number(expense.amount).toLocaleString()}
+                  {maskMoney ? "—" : `₪${Number(expense.amount).toLocaleString()}`}
                 </span>
-                <button
-                  onClick={() => handleDelete(expense.id)}
-                  className="rounded-lg p-1.5 text-muted hover:bg-danger/10 hover:text-danger"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
+                {canMutate && (
+                  <button
+                    onClick={() => handleDelete(expense.id)}
+                    className="rounded-lg p-1.5 text-muted hover:bg-danger/10 hover:text-danger"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
               </div>
             </div>
           ))}
@@ -456,10 +471,12 @@ function ExpensesPageInner() {
                     />
                     <span className="flex-1 text-sm">{cat.name}</span>
                     <span className="text-sm font-semibold">
-                      ₪{cat.total.toLocaleString()}
+                      {maskMoney ? "—" : `₪${cat.total.toLocaleString()}`}
                     </span>
                     {cat.budget && (
-                      <span className="text-xs text-muted">/ ₪{cat.budget.toLocaleString()}</span>
+                      <span className="text-xs text-muted">
+                        / {maskMoney ? "—" : `₪${cat.budget.toLocaleString()}`}
+                      </span>
                     )}
                   </div>
                   <div className="mt-1 mr-6 h-2 rounded-full bg-surface-dim">
@@ -485,7 +502,7 @@ function ExpensesPageInner() {
       )}
 
       {/* Add Expense Modal */}
-      {showForm && (
+      {showForm && canMutate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-surface p-6 shadow-xl">
             <div className="mb-5 flex items-center justify-between">
@@ -639,7 +656,7 @@ function ExpensesPageInner() {
       )}
 
       {/* Budget Modal */}
-      {showBudgetForm && (
+      {showBudgetForm && canMutate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md rounded-2xl bg-surface p-6 shadow-xl">
             <div className="mb-5 flex items-center justify-between">

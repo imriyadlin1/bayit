@@ -45,6 +45,8 @@ interface Permissions {
   loading: boolean;
   isHouseholdAdmin: boolean;
   can: (feature: FeatureKey, level?: AccessLevel) => boolean;
+  /** מניעת שינויים — רק כשהרמה בפועל היא `edit` (לא view ולא hidden) */
+  canEdit: (feature: FeatureKey) => boolean;
   getLevel: (feature: FeatureKey) => AccessLevel;
   visibleFeatures: FeatureKey[];
   /** משתנה בכל פעם שהרשאות נטענות מחדש — לשימוש ב-dependencies של דשבורד וכו׳ */
@@ -183,6 +185,10 @@ export function usePermissions(householdId: string | null, userId: string | null
     return false;
   }
 
+  function canEdit(feature: FeatureKey): boolean {
+    return getLevel(feature) === "edit";
+  }
+
   const visibleFeatures = ALL_FEATURES.filter((f) => can(f, "view"));
 
   const permsSnapshot = useMemo(() => {
@@ -194,6 +200,7 @@ export function usePermissions(householdId: string | null, userId: string | null
     loading,
     isHouseholdAdmin,
     can,
+    canEdit,
     getLevel,
     visibleFeatures,
     permRevision,

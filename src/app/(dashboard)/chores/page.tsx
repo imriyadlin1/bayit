@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useHousehold } from "@/hooks/use-household";
+import { useHouseholdPermissions } from "@/contexts/household-permissions-context";
 import { FeatureGate } from "@/components/auth/FeatureGate";
 import { LoadingScreen } from "@/components/ui/loading";
+import { ViewOnlyBanner } from "@/components/ui/view-only-banner";
 import {
   Plus,
   X,
@@ -29,6 +31,8 @@ const frequencyLabels: Record<string, string> = {
 
 function ChoresPageInner() {
   const { household, userId, user, loading: hhLoading } = useHousehold();
+  const { canEdit } = useHouseholdPermissions();
+  const canMutate = canEdit("chores");
   const [chores, setChores] = useState<(Chore & { completions?: ChoreCompletion[]; assignee_name?: string })[]>([]);
   const [members, setMembers] = useState<{ user_id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
@@ -84,7 +88,7 @@ function ChoresPageInner() {
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
-    if (!household || !userId) return;
+    if (!canMutate || !household || !userId) return;
     setSaving(true);
 
     await supabase.from("chores").insert({
@@ -125,6 +129,7 @@ function ChoresPageInner() {
   }
 
   async function markDone(choreId: string) {
+    if (!canMutate) return;
     await supabase.from("chore_completions").insert({
       chore_id: choreId,
       completed_by: userId,
@@ -146,6 +151,7 @@ function ChoresPageInner() {
   }
 
   async function deleteChore(id: string) {
+    if (!canMutate) return;
     await supabase.from("chores").delete().eq("id", id);
     setChores((prev) => prev.filter((c) => c.id !== id));
   }
@@ -177,6 +183,7 @@ function ChoresPageInner() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
+      {!canMutate && <ViewOnlyBanner />}
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -186,13 +193,15 @@ function ChoresPageInner() {
             {myChoresCount > 0 && ` · ${myChoresCount} שלך`}
           </p>
         </div>
-        <button
-          onClick={() => setShowForm(true)}
-          className="flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          מטלה חדשה
-        </button>
+        {canMutate && (
+          <button
+            onClick={() => setShowForm(true)}
+            className="flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            מטלה חדשה
+          </button>
+        )}
       </div>
 
       {/* Stats */}
@@ -220,7 +229,9 @@ function ChoresPageInner() {
         <div className="rounded-2xl border bg-surface p-12 text-center">
           <ListChecks className="mx-auto mb-3 h-10 w-10 text-muted" />
           <p className="font-medium">אין מטלות עדיין</p>
-          <p className="mt-1 text-sm text-muted">הוסיפו את המטלה הראשונה</p>
+          <p className="mt-1 text-sm text-muted">
+            {canMutate ? "הוסיפו את המטלה הראשונה" : "אין מטלות להצגה"}
+          </p>
         </div>
       ) : (
         <>
@@ -238,12 +249,20 @@ function ChoresPageInner() {
                         : ""
                     }`}
                   >
-                    <button
-                      onClick={() => markDone(chore.id)}
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-border hover:border-primary hover:bg-primary/10 transition-all"
-                    >
-                      <Check className="h-4 w-4 text-transparent hover:text-primary" />
-                    </button>
+                    {canMutate ? (
+                      <button
+                        type="button"
+                        onClick={() => markDone(chore.id)}
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-border hover:border-primary hover:bg-primary/10 transition-all"
+                      >
+                        <Check className="h-4 w-4 text-transparent hover:text-primary" />
+                      </button>
+                    ) : (
+                      <span
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-border opacity-50"
+                        aria-hidden
+                      />
+                    )}
                     <div className="flex-1">
                       <p className="font-medium">{chore.title}</p>
                       <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted">
@@ -281,12 +300,15 @@ function ChoresPageInner() {
                         <CalendarPlus className="h-3.5 w-3.5" />
                         ליומן
                       </a>
-                      <button
-                        onClick={() => deleteChore(chore.id)}
-                        className="rounded-lg p-1.5 text-muted hover:text-danger"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      {canMutate && (
+                        <button
+                          type="button"
+                          onClick={() => deleteChore(chore.id)}
+                          className="rounded-lg p-1.5 text-muted hover:text-danger"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -313,12 +335,15 @@ function ChoresPageInner() {
                         {frequencyLabels[chore.frequency]} · {chore.assignee_name}
                       </p>
                     </div>
-                    <button
-                      onClick={() => deleteChore(chore.id)}
-                      className="rounded-lg p-1.5 text-muted hover:text-danger"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    {canMutate && (
+                      <button
+                        type="button"
+                        onClick={() => deleteChore(chore.id)}
+                        className="rounded-lg p-1.5 text-muted hover:text-danger"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -328,7 +353,7 @@ function ChoresPageInner() {
       )}
 
       {/* Add Chore Modal */}
-      {showForm && (
+      {showForm && canMutate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md rounded-2xl bg-surface p-6 shadow-xl">
             <div className="mb-5 flex items-center justify-between">

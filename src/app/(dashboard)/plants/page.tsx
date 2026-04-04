@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useHousehold } from "@/hooks/use-household";
+import { useHouseholdPermissions } from "@/contexts/household-permissions-context";
 import { FeatureGate } from "@/components/auth/FeatureGate";
 import { LoadingScreen } from "@/components/ui/loading";
+import { ViewOnlyBanner } from "@/components/ui/view-only-banner";
 import {
   Plus,
   X,
@@ -70,6 +72,8 @@ const sunlightLabels: Record<string, { label: string; icon: typeof Sun }> = {
 
 function PlantsPageInner() {
   const { household, userId, loading: hhLoading } = useHousehold();
+  const { canEdit } = useHouseholdPermissions();
+  const canMutate = canEdit("plants");
   const [plants, setPlants] = useState<Plant[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -116,7 +120,7 @@ function PlantsPageInner() {
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
-    if (!household || !userId) return;
+    if (!canMutate || !household || !userId) return;
     setSaving(true);
 
     const freq = parseInt(waterDays) || 7;
@@ -162,6 +166,7 @@ function PlantsPageInner() {
   }
 
   async function waterPlant(plant: Plant) {
+    if (!canMutate) return;
     const today = new Date().toISOString().split("T")[0];
     const nextWater = new Date();
     nextWater.setDate(nextWater.getDate() + (plant.watering_frequency_days || 7));
@@ -184,6 +189,7 @@ function PlantsPageInner() {
   }
 
   async function deletePlant(id: string) {
+    if (!canMutate) return;
     await supabase.from("plants").delete().eq("id", id);
     setPlants((prev) => prev.filter((p) => p.id !== id));
   }
@@ -204,6 +210,7 @@ function PlantsPageInner() {
 
   return (
     <div className="space-y-6">
+      {!canMutate && <ViewOnlyBanner />}
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -214,13 +221,15 @@ function PlantsPageInner() {
             השקיה
           </p>
         </div>
-        <button
-          onClick={() => setShowForm(true)}
-          className="flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          צמח חדש
-        </button>
+        {canMutate && (
+          <button
+            onClick={() => setShowForm(true)}
+            className="flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            צמח חדש
+          </button>
+        )}
       </div>
 
       {/* Plants Grid */}
@@ -231,7 +240,7 @@ function PlantsPageInner() {
           <Sprout className="mx-auto mb-3 h-10 w-10 text-muted" />
           <p className="font-medium">אין צמחים עדיין</p>
           <p className="mt-1 text-sm text-muted">
-            הוסיפו את הצמח הראשון שלכם
+            {canMutate ? "הוסיפו את הצמח הראשון שלכם" : "אין צמחים להצגה"}
           </p>
         </div>
       ) : (
@@ -249,12 +258,15 @@ function PlantsPageInner() {
                     <div className={`h-2.5 w-2.5 rounded-full ${statusDotColors[status]}`} />
                     <h3 className="font-bold">{plant.name}</h3>
                   </div>
-                  <button
-                    onClick={() => deletePlant(plant.id)}
-                    className="rounded-lg p-1 text-muted hover:text-danger"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  {canMutate && (
+                    <button
+                      type="button"
+                      onClick={() => deletePlant(plant.id)}
+                      className="rounded-lg p-1 text-muted hover:text-danger"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
 
                 {plant.species && (
@@ -309,13 +321,16 @@ function PlantsPageInner() {
                         תזכורת
                       </a>
                     )}
-                    <button
-                      onClick={() => waterPlant(plant)}
-                      className="flex items-center gap-1 rounded-lg bg-blue-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-600 transition-colors"
-                    >
-                      <Droplets className="h-3 w-3" />
-                      השקיתי
-                    </button>
+                    {canMutate && (
+                      <button
+                        type="button"
+                        onClick={() => waterPlant(plant)}
+                        className="flex items-center gap-1 rounded-lg bg-blue-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-600 transition-colors"
+                      >
+                        <Droplets className="h-3 w-3" />
+                        השקיתי
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -325,7 +340,7 @@ function PlantsPageInner() {
       )}
 
       {/* Add Plant Modal */}
-      {showForm && (
+      {showForm && canMutate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md rounded-2xl bg-surface p-6 shadow-xl">
             <div className="mb-5 flex items-center justify-between">

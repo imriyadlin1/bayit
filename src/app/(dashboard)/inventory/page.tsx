@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useHousehold } from "@/hooks/use-household";
+import { useHouseholdPermissions } from "@/contexts/household-permissions-context";
 import { FeatureGate } from "@/components/auth/FeatureGate";
 import { LoadingScreen } from "@/components/ui/loading";
+import { ViewOnlyBanner } from "@/components/ui/view-only-banner";
 import {
   Plus,
   X,
@@ -32,6 +34,9 @@ const CATEGORIES = [
 
 function InventoryPageInner() {
   const { household, userId, loading: hhLoading } = useHousehold();
+  const { canEdit } = useHouseholdPermissions();
+  const canMutate = canEdit("inventory");
+  const canMutateShopping = canEdit("shopping");
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -69,7 +74,7 @@ function InventoryPageInner() {
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
-    if (!household || !userId) return;
+    if (!canMutate || !household || !userId) return;
     setSaving(true);
 
     await supabase.from("inventory_items").insert({
@@ -95,6 +100,7 @@ function InventoryPageInner() {
   }
 
   async function updateQuantity(item: InventoryItem, delta: number) {
+    if (!canMutate) return;
     const newQty = Math.max(0, Number(item.quantity) + delta);
     await supabase
       .from("inventory_items")
@@ -107,12 +113,13 @@ function InventoryPageInner() {
   }
 
   async function deleteItem(id: string) {
+    if (!canMutate) return;
     await supabase.from("inventory_items").delete().eq("id", id);
     setItems((prev) => prev.filter((i) => i.id !== id));
   }
 
   async function addToShoppingList(item: InventoryItem) {
-    if (!household || !userId) return;
+    if (!canMutate || !canMutateShopping || !household || !userId) return;
 
     let { data: lists } = await supabase
       .from("shopping_lists")
@@ -123,7 +130,7 @@ function InventoryPageInner() {
 
     let listId = lists?.[0]?.id;
 
-    if (!listId) {
+    if (!listId && canMutateShopping) {
       const { data: newList } = await supabase
         .from("shopping_lists")
         .insert({ household_id: household.id, name: "רשימת קניות", created_by: userId })
@@ -185,6 +192,7 @@ function InventoryPageInner() {
 
   return (
     <div className="space-y-6">
+      {!canMutate && <ViewOnlyBanner />}
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -199,13 +207,15 @@ function InventoryPageInner() {
             )}
           </p>
         </div>
-        <button
-          onClick={() => setShowForm(true)}
-          className="flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          פריט חדש
-        </button>
+        {canMutate && (
+          <button
+            onClick={() => setShowForm(true)}
+            className="flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            פריט חדש
+          </button>
+        )}
       </div>
 
       {/* Low stock alert */}
@@ -216,17 +226,19 @@ function InventoryPageInner() {
               <AlertTriangle className="h-4 w-4 text-accent" />
               <span className="text-sm font-bold">{lowStockItems.length} פריטים עומדים להיגמר</span>
             </div>
-            <button
-              onClick={async () => {
-                for (const item of lowStockItems) {
-                  if (!addedToCart.has(item.id)) await addToShoppingList(item);
-                }
-              }}
-              className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary-dark transition-colors"
-            >
-              <ShoppingCart className="h-3.5 w-3.5" />
-              הוסף הכל לקניות
-            </button>
+            {canMutate && canMutateShopping && (
+              <button
+                onClick={async () => {
+                  for (const item of lowStockItems) {
+                    if (!addedToCart.has(item.id)) await addToShoppingList(item);
+                  }
+                }}
+                className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary-dark transition-colors"
+              >
+                <ShoppingCart className="h-3.5 w-3.5" />
+                הוסף הכל לקניות
+              </button>
+            )}
           </div>
           <div className="flex flex-wrap gap-2">
             {lowStockItems.map((item) => (
@@ -270,7 +282,11 @@ function InventoryPageInner() {
           <Package className="mx-auto mb-3 h-10 w-10 text-muted" />
           <p className="font-medium">{items.length === 0 ? "המלאי ריק" : "אין תוצאות"}</p>
           <p className="mt-1 text-sm text-muted">
-            {items.length === 0 ? "הוסיפו פריטים כדי לעקוב אחרי מה שיש בבית" : "נסו חיפוש אחר"}
+            {items.length === 0
+              ? canMutate
+                ? "הוסיפו פריטים כדי לעקוב אחרי מה שיש בבית"
+                : "אין פריטים להצגה"
+              : "נסו חיפוש אחר"}
           </p>
         </div>
       ) : (
@@ -312,7 +328,7 @@ function InventoryPageInner() {
                   </div>
                 </div>
 
-                {low && (
+                {low && canMutate && canMutateShopping && (
                   <button
                     onClick={() => addToShoppingList(item)}
                     disabled={inCart}
@@ -337,30 +353,44 @@ function InventoryPageInner() {
                 )}
 
                 <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={() => updateQuantity(item, -1)}
-                    className="flex h-8 w-8 items-center justify-center rounded-lg border text-lg hover:bg-surface-dim"
-                  >
-                    -
-                  </button>
-                  <span className="w-12 text-center font-semibold">
-                    {Number(item.quantity)}
-                    {item.unit ? ` ${item.unit}` : ""}
-                  </span>
-                  <button
-                    onClick={() => updateQuantity(item, 1)}
-                    className="flex h-8 w-8 items-center justify-center rounded-lg border text-lg hover:bg-surface-dim"
-                  >
-                    +
-                  </button>
+                  {canMutate ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => updateQuantity(item, -1)}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg border text-lg hover:bg-surface-dim"
+                      >
+                        -
+                      </button>
+                      <span className="w-12 text-center font-semibold">
+                        {Number(item.quantity)}
+                        {item.unit ? ` ${item.unit}` : ""}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => updateQuantity(item, 1)}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg border text-lg hover:bg-surface-dim"
+                      >
+                        +
+                      </button>
+                    </>
+                  ) : (
+                    <span className="min-w-[3rem] text-center font-semibold">
+                      {Number(item.quantity)}
+                      {item.unit ? ` ${item.unit}` : ""}
+                    </span>
+                  )}
                 </div>
 
-                <button
-                  onClick={() => deleteItem(item.id)}
-                  className="rounded-lg p-1.5 text-muted hover:text-danger"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
+                {canMutate && (
+                  <button
+                    type="button"
+                    onClick={() => deleteItem(item.id)}
+                    className="rounded-lg p-1.5 text-muted hover:text-danger"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
               </div>
             );
           })}
@@ -368,7 +398,7 @@ function InventoryPageInner() {
       )}
 
       {/* Add Item Modal */}
-      {showForm && (
+      {showForm && canMutate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md rounded-2xl bg-surface p-6 shadow-xl">
             <div className="mb-5 flex items-center justify-between">

@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useHousehold } from "@/hooks/use-household";
+import { useHouseholdPermissions } from "@/contexts/household-permissions-context";
 import { FeatureGate } from "@/components/auth/FeatureGate";
 import { LoadingScreen } from "@/components/ui/loading";
+import { ViewOnlyBanner } from "@/components/ui/view-only-banner";
 import {
   Plus,
   X,
@@ -52,6 +54,8 @@ function getDueStatus(item: MaintenanceItem): "ok" | "soon" | "overdue" {
 
 function MaintenancePageInner() {
   const { household, userId, loading: hhLoading } = useHousehold();
+  const { canEdit } = useHouseholdPermissions();
+  const canMutate = canEdit("maintenance");
   const [items, setItems] = useState<MaintenanceItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -88,7 +92,7 @@ function MaintenancePageInner() {
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
-    if (!household || !userId) return;
+    if (!canMutate || !household || !userId) return;
     setSaving(true);
 
     await supabase.from("maintenance_items").insert({
@@ -136,6 +140,7 @@ function MaintenancePageInner() {
   }
 
   async function markDone(item: MaintenanceItem) {
+    if (!canMutate) return;
     const today = new Date().toISOString().split("T")[0];
     let newNextDue: string | null = null;
 
@@ -159,6 +164,7 @@ function MaintenancePageInner() {
   }
 
   async function deleteItem(id: string) {
+    if (!canMutate) return;
     await supabase.from("maintenance_items").delete().eq("id", id);
     setItems((prev) => prev.filter((i) => i.id !== id));
   }
@@ -175,6 +181,7 @@ function MaintenancePageInner() {
 
   return (
     <div className="space-y-6">
+      {!canMutate && <ViewOnlyBanner />}
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -186,13 +193,15 @@ function MaintenancePageInner() {
             )}
           </p>
         </div>
-        <button
-          onClick={() => setShowForm(true)}
-          className="flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          משימה חדשה
-        </button>
+        {canMutate && (
+          <button
+            onClick={() => setShowForm(true)}
+            className="flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            משימה חדשה
+          </button>
+        )}
       </div>
 
       {/* Items List */}
@@ -203,7 +212,7 @@ function MaintenancePageInner() {
           <Wrench className="mx-auto mb-3 h-10 w-10 text-muted" />
           <p className="font-medium">אין משימות תחזוקה</p>
           <p className="mt-1 text-sm text-muted">
-            הוסיפו תזכורות לפילטר מזגן, הדברה, ועוד
+            {canMutate ? "הוסיפו תזכורות לפילטר מזגן, הדברה, ועוד" : "אין משימות להצגה"}
           </p>
         </div>
       ) : (
@@ -299,19 +308,25 @@ function MaintenancePageInner() {
                         ליומן
                       </a>
                     )}
-                    <button
-                      onClick={() => markDone(item)}
-                      className="flex items-center gap-1 rounded-lg bg-success/10 px-3 py-1.5 text-xs font-semibold text-success hover:bg-success/20 transition-colors"
-                    >
-                      <CheckCircle className="h-3.5 w-3.5" />
-                      בוצע
-                    </button>
-                    <button
-                      onClick={() => deleteItem(item.id)}
-                      className="rounded-lg p-1.5 text-muted hover:text-danger"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    {canMutate && (
+                      <button
+                        type="button"
+                        onClick={() => markDone(item)}
+                        className="flex items-center gap-1 rounded-lg bg-success/10 px-3 py-1.5 text-xs font-semibold text-success hover:bg-success/20 transition-colors"
+                      >
+                        <CheckCircle className="h-3.5 w-3.5" />
+                        בוצע
+                      </button>
+                    )}
+                    {canMutate && (
+                      <button
+                        type="button"
+                        onClick={() => deleteItem(item.id)}
+                        className="rounded-lg p-1.5 text-muted hover:text-danger"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -328,7 +343,7 @@ function MaintenancePageInner() {
       )}
 
       {/* Add Modal */}
-      {showForm && (
+      {showForm && canMutate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-surface p-6 shadow-xl">
             <div className="mb-5 flex items-center justify-between">

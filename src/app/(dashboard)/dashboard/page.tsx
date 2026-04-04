@@ -32,7 +32,7 @@ interface DashboardData {
 
 export default function DashboardPage() {
   const { household, userId, user, loading: hhLoading } = useHousehold();
-  const { getLevel, loading: permLoading, permRevision, permsSnapshot } = useHouseholdPermissions();
+  const { getLevel, canEdit, loading: permLoading, permRevision, permsSnapshot } = useHouseholdPermissions();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
@@ -219,6 +219,7 @@ export default function DashboardPage() {
   }
 
   async function waterPlant(plantId: string) {
+    if (!canEdit("plants") || !userId) return;
     const today = new Date().toISOString().split("T")[0];
 
     const { data: plant } = await supabase
@@ -251,7 +252,6 @@ export default function DashboardPage() {
   if (!data) return <LoadingScreen />;
 
   const see = (f: FeatureKey) => getLevel(f) !== "hidden";
-  const canEdit = (f: FeatureKey) => getLevel(f) === "edit";
   const maskExpenseMoney = see("expenses") && getLevel("expenses") === "view";
 
   const statDefs = [

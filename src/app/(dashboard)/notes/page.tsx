@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useHousehold } from "@/hooks/use-household";
+import { useHouseholdPermissions } from "@/contexts/household-permissions-context";
 import { FeatureGate } from "@/components/auth/FeatureGate";
 import { LoadingScreen } from "@/components/ui/loading";
+import { ViewOnlyBanner } from "@/components/ui/view-only-banner";
 import {
   Plus,
   X,
@@ -27,6 +29,8 @@ const NOTE_COLORS = [
 
 function NotesPageInner() {
   const { household, userId, loading: hhLoading } = useHousehold();
+  const { canEdit } = useHouseholdPermissions();
+  const canMutate = canEdit("notes");
   const [notes, setNotes] = useState<(HouseholdNote & { author_name?: string })[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -66,7 +70,7 @@ function NotesPageInner() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!household || !userId) return;
+    if (!canMutate || !household || !userId) return;
     setSaving(true);
 
     if (editId) {
@@ -98,6 +102,7 @@ function NotesPageInner() {
   }
 
   function startEdit(note: HouseholdNote) {
+    if (!canMutate) return;
     setTitle(note.title || "");
     setContent(note.content);
     setColor(note.color);
@@ -106,6 +111,7 @@ function NotesPageInner() {
   }
 
   async function togglePin(note: HouseholdNote) {
+    if (!canMutate) return;
     await supabase
       .from("household_notes")
       .update({ pinned: !note.pinned })
@@ -114,6 +120,7 @@ function NotesPageInner() {
   }
 
   async function deleteNote(id: string) {
+    if (!canMutate) return;
     await supabase.from("household_notes").delete().eq("id", id);
     setNotes((prev) => prev.filter((n) => n.id !== id));
   }
@@ -122,18 +129,21 @@ function NotesPageInner() {
 
   return (
     <div className="space-y-6">
+      {!canMutate && <ViewOnlyBanner />}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">לוח הודעות</h1>
           <p className="text-muted">הודעות ופתקים לכל בני הבית</p>
         </div>
-        <button
-          onClick={() => setShowForm(true)}
-          className="flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          הודעה חדשה
-        </button>
+        {canMutate && (
+          <button
+            onClick={() => setShowForm(true)}
+            className="flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            הודעה חדשה
+          </button>
+        )}
       </div>
 
       {loading ? (
@@ -143,7 +153,7 @@ function NotesPageInner() {
           <StickyNote className="mx-auto mb-3 h-10 w-10 text-muted" />
           <p className="font-medium">אין הודעות עדיין</p>
           <p className="mt-1 text-sm text-muted">
-            השאירו הודעות ופתקים לבני הבית
+            {canMutate ? "השאירו הודעות ופתקים לבני הבית" : "אין הודעות להצגה"}
           </p>
         </div>
       ) : (
@@ -160,28 +170,33 @@ function NotesPageInner() {
                     <h3 className="font-bold">{note.title}</h3>
                   )}
                 </div>
-                <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                  <button
-                    onClick={() => togglePin(note)}
-                    className={`rounded-lg p-1 ${
-                      note.pinned ? "text-primary" : "text-muted hover:text-primary"
-                    }`}
-                  >
-                    <Pin className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    onClick={() => startEdit(note)}
-                    className="rounded-lg p-1 text-muted hover:text-foreground"
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    onClick={() => deleteNote(note.id)}
-                    className="rounded-lg p-1 text-muted hover:text-danger"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
+                {canMutate && (
+                  <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                    <button
+                      type="button"
+                      onClick={() => togglePin(note)}
+                      className={`rounded-lg p-1 ${
+                        note.pinned ? "text-primary" : "text-muted hover:text-primary"
+                      }`}
+                    >
+                      <Pin className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => startEdit(note)}
+                      className="rounded-lg p-1 text-muted hover:text-foreground"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => deleteNote(note.id)}
+                      className="rounded-lg p-1 text-muted hover:text-danger"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
               </div>
 
               <p className="whitespace-pre-wrap text-sm leading-relaxed">
@@ -202,7 +217,7 @@ function NotesPageInner() {
         </div>
       )}
 
-      {showForm && (
+      {showForm && canMutate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md rounded-2xl bg-surface p-6 shadow-xl">
             <div className="mb-5 flex items-center justify-between">
