@@ -8,9 +8,24 @@ const publicPaths = [
   "/pending-confirmation",
 ];
 
+/** נתיבי metadata/אייקונים — חייבים להיות נגישים בלי התחברות (סורקי ווטסאפ/פייסבוק וכו׳) */
+function isMetadataAssetPath(pathname: string) {
+  return (
+    pathname === "/opengraph-image" ||
+    pathname === "/twitter-image" ||
+    pathname === "/icon" ||
+    pathname === "/apple-icon" ||
+    pathname.startsWith("/opengraph-image/") ||
+    pathname.startsWith("/icon/") ||
+    pathname.startsWith("/apple-icon/")
+  );
+}
+
 function isPublicPath(pathname: string) {
   return (
-    publicPaths.includes(pathname) || pathname.startsWith("/auth/")
+    publicPaths.includes(pathname) ||
+    pathname.startsWith("/auth/") ||
+    isMetadataAssetPath(pathname)
   );
 }
 

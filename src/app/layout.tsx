@@ -23,12 +23,14 @@ export const metadata: Metadata = {
     title: "בית - ניהול משק בית חכם",
     description:
       "פלטפורמה חכמה לניהול משק הבית - הוצאות, קניות, צמחים, מטלות ועוד.",
+    images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "בית — ניהול משק בית" }],
   },
   twitter: {
     card: "summary_large_image",
     title: "בית - ניהול משק בית חכם",
     description:
       "פלטפורמה חכמה לניהול משק הבית - הוצאות, קניות, צמחים, מטלות ועוד.",
+    images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "בית — ניהול משק בית" }],
   },
   appleWebApp: {
     capable: true,
