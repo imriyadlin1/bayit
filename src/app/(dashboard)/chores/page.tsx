@@ -39,6 +39,7 @@ export default function ChoresPage() {
   const [frequency, setFrequency] = useState("weekly");
   const [assignedTo, setAssignedTo] = useState("");
   const [rotate, setRotate] = useState(false);
+  const [addToCalendar, setAddToCalendar] = useState(false);
 
   const supabase = createClient();
 
@@ -95,11 +96,28 @@ export default function ChoresPage() {
       created_by: userId,
     });
 
+    if (addToCalendar) {
+      window.open(
+        googleCalendarUrl({
+          title: `🏠 ${title}`,
+          date: new Date().toISOString().split("T")[0],
+          details: description || undefined,
+          recurrence:
+            frequency === "daily" ? "DAILY"
+            : frequency === "weekly" ? "WEEKLY"
+            : frequency === "monthly" ? "MONTHLY"
+            : undefined,
+        }),
+        "_blank"
+      );
+    }
+
     setTitle("");
     setDescription("");
     setFrequency("weekly");
     setAssignedTo("");
     setRotate(false);
+    setAddToCalendar(false);
     setShowForm(false);
     setSaving(false);
     loadData();
@@ -394,6 +412,17 @@ export default function ChoresPage() {
                   className="h-4 w-4 rounded border-border accent-primary"
                 />
                 רוטציה אוטומטית בין חברי הבית
+              </label>
+
+              <label className="flex items-center gap-2 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm cursor-pointer hover:bg-primary/10 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={addToCalendar}
+                  onChange={(e) => setAddToCalendar(e.target.checked)}
+                  className="h-4 w-4 rounded border-border accent-primary"
+                />
+                <CalendarPlus className="h-4 w-4 text-primary" />
+                <span className="font-medium">הוסף ליומן Google</span>
               </label>
 
               <button

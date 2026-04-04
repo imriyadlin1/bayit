@@ -80,6 +80,7 @@ export default function PlantsPage() {
   const [location, setLocation] = useState("");
   const [waterDays, setWaterDays] = useState("");
   const [sunlight, setSunlight] = useState("partial");
+  const [addToCalendar, setAddToCalendar] = useState(false);
 
   const supabase = createClient();
 
@@ -134,11 +135,25 @@ export default function PlantsPage() {
       added_by: userId,
     });
 
+    if (addToCalendar) {
+      const nextWaterDate = new Date();
+      nextWaterDate.setDate(nextWaterDate.getDate() + freq);
+      window.open(
+        googleCalendarUrl({
+          title: `🌱 השקיה: ${name}`,
+          date: nextWaterDate.toISOString().split("T")[0],
+          recurrence: freq <= 3 ? "DAILY" : "WEEKLY",
+        }),
+        "_blank"
+      );
+    }
+
     setName("");
     setSpecies("");
     setLocation("");
     setWaterDays("");
     setSunlight("partial");
+    setAddToCalendar(false);
     setSuggestion(null);
     setShowForm(false);
     setSaving(false);
@@ -396,6 +411,17 @@ export default function PlantsPage() {
                   </select>
                 </div>
               </div>
+
+              <label className="flex items-center gap-2 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm cursor-pointer hover:bg-primary/10 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={addToCalendar}
+                  onChange={(e) => setAddToCalendar(e.target.checked)}
+                  className="h-4 w-4 rounded border-border accent-primary"
+                />
+                <CalendarPlus className="h-4 w-4 text-primary" />
+                <span className="font-medium">תזכורת השקיה ביומן Google</span>
+              </label>
 
               <button
                 type="submit"

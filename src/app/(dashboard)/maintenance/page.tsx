@@ -64,6 +64,7 @@ export default function MaintenancePage() {
   const [serviceProvider, setServiceProvider] = useState("");
   const [servicePhone, setServicePhone] = useState("");
   const [cost, setCost] = useState("");
+  const [addToCalendar, setAddToCalendar] = useState(false);
 
   const supabase = createClient();
 
@@ -102,6 +103,23 @@ export default function MaintenancePage() {
       created_by: userId,
     });
 
+    if (addToCalendar && nextDue) {
+      window.open(
+        googleCalendarUrl({
+          title: `🔧 ${title}`,
+          date: nextDue,
+          details: [
+            description,
+            serviceProvider && `נותן שירות: ${serviceProvider}`,
+            servicePhone && `טלפון: ${servicePhone}`,
+          ].filter(Boolean).join("\n") || undefined,
+          recurrence:
+            frequency === "monthly" ? "MONTHLY" : frequency === "yearly" ? "YEARLY" : undefined,
+        }),
+        "_blank"
+      );
+    }
+
     setTitle("");
     setDescription("");
     setFrequency("yearly");
@@ -110,6 +128,7 @@ export default function MaintenancePage() {
     setServiceProvider("");
     setServicePhone("");
     setCost("");
+    setAddToCalendar(false);
     setShowForm(false);
     setSaving(false);
     loadItems();
@@ -438,6 +457,17 @@ export default function MaintenancePage() {
                   dir="ltr"
                 />
               </div>
+
+              <label className="flex items-center gap-2 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm cursor-pointer hover:bg-primary/10 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={addToCalendar}
+                  onChange={(e) => setAddToCalendar(e.target.checked)}
+                  className="h-4 w-4 rounded border-border accent-primary"
+                />
+                <CalendarPlus className="h-4 w-4 text-primary" />
+                <span className="font-medium">הוסף ליומן Google</span>
+              </label>
 
               <button
                 type="submit"
