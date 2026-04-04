@@ -287,10 +287,10 @@ export default function PlantsPage() {
                         })}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="rounded-lg p-1.5 text-muted hover:text-primary"
-                        title="תזכורת ביומן"
+                        className="flex items-center gap-1 rounded-lg border border-primary/20 bg-white/80 px-2.5 py-1.5 text-xs font-medium text-primary hover:bg-primary/10 transition-colors"
                       >
                         <CalendarPlus className="h-3.5 w-3.5" />
+                        תזכורת
                       </a>
                     )}
                     <button

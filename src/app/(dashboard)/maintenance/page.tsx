@@ -273,10 +273,10 @@ export default function MaintenancePage() {
                         })}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="rounded-lg p-1.5 text-muted hover:text-primary"
-                        title="הוסף ליומן Google"
+                        className="flex items-center gap-1 rounded-lg border border-primary/20 bg-primary/5 px-2.5 py-1.5 text-xs font-medium text-primary hover:bg-primary/10 transition-colors"
                       >
-                        <CalendarPlus className="h-4 w-4" />
+                        <CalendarPlus className="h-3.5 w-3.5" />
+                        ליומן
                       </a>
                     )}
                     <button
