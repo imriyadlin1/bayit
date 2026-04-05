@@ -30,11 +30,11 @@ function inRange(ymd: string, start: string, end: string): boolean {
   return ymdCompare(ymd, start) >= 0 && ymdCompare(ymd, end) <= 0;
 }
 
-export function filterLogsInWindow(
-  logs: LogLike[],
+export function filterLogsInWindow<T extends LogLike>(
+  logs: T[],
   todayYmd: string,
   windowDays: number,
-): LogLike[] {
+): T[] {
   const end = todayYmd;
   const start = addLocalDays(todayYmd, -(windowDays - 1));
   return logs.filter((l) => inRange(l.occurred_at, start, end));
@@ -50,13 +50,13 @@ export function previousWindowRange(
   return { start, end };
 }
 
-export function computePeriodCompare(
-  logs: LogLike[],
+export function computePeriodCompare<T extends LogLike>(
+  logs: T[],
   todayYmd: string,
   windowDays: number,
 ): {
-  current: LogLike[];
-  previous: LogLike[];
+  current: T[];
+  previous: T[];
   currentCount: number;
   previousCount: number;
   currentMinutes: number;
