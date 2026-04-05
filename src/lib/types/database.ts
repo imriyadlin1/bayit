@@ -201,27 +201,45 @@ export interface HouseholdNote {
   updated_at: string;
 }
 
-/** מדורי פריטים אישיים (לא כולל יעדים — ראו personal_goals) */
-export type PersonalItemSection =
-  | "studies"
-  | "work"
-  | "sport"
-  | "finance"
-  | "health";
+/** מעקב פעילות לפי זמן (לא פיננסים — יש מדור נפרד) */
+export type PersonalActivitySection = "studies" | "work" | "sport" | "health";
 
-export interface PersonalItem {
+export interface PersonalActivityLog {
   id: string;
   household_id: string;
-  section: PersonalItemSection;
+  section: PersonalActivitySection;
   title: string;
-  description: string | null;
-  reminder_date: string | null;
-  completed: boolean;
-  completed_at: string | null;
-  sort_order: number;
+  occurred_at: string;
+  duration_minutes: number | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export type FinanceCadence = "weekly" | "monthly" | "yearly";
+
+export interface PersonalFinanceCommitment {
+  id: string;
+  household_id: string;
+  name: string;
+  amount: number;
+  cadence: FinanceCadence;
+  day_of_month: number | null;
+  notes: string | null;
+  active: boolean;
   created_by: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface PersonalFinancePeriodPayment {
+  id: string;
+  commitment_id: string;
+  household_id: string;
+  period_key: string;
+  paid_at: string;
+  note: string | null;
+  created_by: string | null;
 }
 
 /** יעדים במרחב אישי בלבד (households.is_personal) */

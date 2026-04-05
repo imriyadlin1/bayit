@@ -1,8 +1,8 @@
 "use client";
 
 import { Briefcase } from "lucide-react";
-import { PersonalItemsBoard } from "@/components/me/personal-items-board";
+import { PersonalActivitySection } from "@/components/me/personal-activity-section";
 
 export default function MeWorkPage() {
-  return <PersonalItemsBoard section="work" icon={Briefcase} />;
+  return <PersonalActivitySection section="work" icon={Briefcase} />;
 }

@@ -1,8 +1,8 @@
 "use client";
 
 import { HeartPulse } from "lucide-react";
-import { PersonalItemsBoard } from "@/components/me/personal-items-board";
+import { PersonalActivitySection } from "@/components/me/personal-activity-section";
 
 export default function MeHealthPage() {
-  return <PersonalItemsBoard section="health" icon={HeartPulse} />;
+  return <PersonalActivitySection section="health" icon={HeartPulse} />;
 }

@@ -1,8 +1,8 @@
 "use client";
 
 import { Dumbbell } from "lucide-react";
-import { PersonalItemsBoard } from "@/components/me/personal-items-board";
+import { PersonalActivitySection } from "@/components/me/personal-activity-section";
 
 export default function MeSportPage() {
-  return <PersonalItemsBoard section="sport" icon={Dumbbell} />;
+  return <PersonalActivitySection section="sport" icon={Dumbbell} />;
 }

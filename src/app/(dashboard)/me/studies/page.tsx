@@ -1,8 +1,8 @@
 "use client";
 
 import { BookOpen } from "lucide-react";
-import { PersonalItemsBoard } from "@/components/me/personal-items-board";
+import { PersonalActivitySection } from "@/components/me/personal-activity-section";
 
 export default function MeStudiesPage() {
-  return <PersonalItemsBoard section="studies" icon={BookOpen} />;
+  return <PersonalActivitySection section="studies" icon={BookOpen} />;
 }
