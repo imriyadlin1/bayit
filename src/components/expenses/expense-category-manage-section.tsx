@@ -229,8 +229,8 @@ export function ExpenseCategoryManageSection(props: Props) {
     <div className="rounded-2xl border bg-surface p-5">
       <h2 className="mb-1 font-bold">ניהול קטגוריות</h2>
       <p className="mb-4 text-xs text-muted">
-        גרירה לפי סמל ⋮⋮ לשינוי הסדר (גם בפילטרים ובחירת קטגוריה). עריכת שם,
-        מחיקה (רק בלי הוצאות משויכות), והוספה.
+        גרירה לפי סמל ⋮⋮ לשינוי הסדר (בפילטרים ובטופס הוצאה). עריכת שם, מחיקה
+        (רק בלי הוצאות משויכות), והוספה — במשק הבית ובמרחב האישי.
       </p>
 
       <DndContext

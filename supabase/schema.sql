@@ -305,8 +305,19 @@ CREATE TABLE personal_activity_logs (
   occurred_at DATE NOT NULL DEFAULT CURRENT_DATE,
   duration_minutes INT CHECK (duration_minutes IS NULL OR duration_minutes >= 0),
   notes TEXT,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_by UUID REFERENCES profiles(id),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE personal_section_settings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  household_id UUID NOT NULL REFERENCES households(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  section TEXT NOT NULL CHECK (section IN ('studies', 'work', 'sport', 'health')),
+  settings JSONB NOT NULL DEFAULT '{}'::jsonb,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (household_id, user_id, section)
 );
 
 -- התחייבויות כספיות קבועות (אישי) — לא הוצאות משק
@@ -359,6 +370,7 @@ ALTER TABLE household_notes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE personal_goals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE personal_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE personal_activity_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE personal_section_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE personal_finance_commitments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE personal_finance_period_payments ENABLE ROW LEVEL SECURITY;
 
@@ -921,6 +933,36 @@ CREATE POLICY "personal_activity_logs_delete" ON personal_activity_logs
     AND is_personal_household(household_id)
   );
 
+CREATE POLICY "personal_section_settings_select" ON personal_section_settings
+  FOR SELECT USING (
+    is_household_member(household_id)
+    AND is_personal_household(household_id)
+    AND user_id = auth.uid()
+  );
+CREATE POLICY "personal_section_settings_insert" ON personal_section_settings
+  FOR INSERT WITH CHECK (
+    is_household_member(household_id)
+    AND is_personal_household(household_id)
+    AND user_id = auth.uid()
+  );
+CREATE POLICY "personal_section_settings_update" ON personal_section_settings
+  FOR UPDATE USING (
+    is_household_member(household_id)
+    AND is_personal_household(household_id)
+    AND user_id = auth.uid()
+  )
+  WITH CHECK (
+    is_household_member(household_id)
+    AND is_personal_household(household_id)
+    AND user_id = auth.uid()
+  );
+CREATE POLICY "personal_section_settings_delete" ON personal_section_settings
+  FOR DELETE USING (
+    is_household_member(household_id)
+    AND is_personal_household(household_id)
+    AND user_id = auth.uid()
+  );
+
 CREATE POLICY "personal_finance_commitments_select" ON personal_finance_commitments
   FOR SELECT USING (
     is_household_member(household_id)
@@ -1102,6 +1144,7 @@ CREATE INDEX idx_household_notes_household ON household_notes(household_id);
 CREATE INDEX idx_personal_goals_household ON personal_goals(household_id);
 CREATE INDEX idx_personal_items_household_section ON personal_items(household_id, section);
 CREATE INDEX idx_personal_activity_household_section_date ON personal_activity_logs(household_id, section, occurred_at DESC);
+CREATE INDEX idx_personal_section_settings_lookup ON personal_section_settings(household_id, user_id, section);
 CREATE INDEX idx_personal_finance_commitments_household ON personal_finance_commitments(household_id);
 CREATE INDEX idx_personal_finance_payments_household ON personal_finance_period_payments(household_id);
 CREATE INDEX idx_personal_finance_payments_commitment ON personal_finance_period_payments(commitment_id);

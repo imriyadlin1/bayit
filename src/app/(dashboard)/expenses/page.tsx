@@ -21,12 +21,13 @@ import {
   Target,
   PieChart,
   Users,
+  Pencil,
 } from "lucide-react";
 import type { Expense, ExpenseCategory, Budget } from "@/lib/types/database";
 import { sortExpenseCategoriesForDisplay } from "@/lib/expense-category-sort";
 
 function ExpensesPageInner() {
-  const { household, userId, loading: hhLoading, isPersonal } = useHousehold();
+  const { household, userId, loading: hhLoading } = useHousehold();
   const { canEdit } = useHouseholdPermissions();
   const canMutate = canEdit("expenses");
   const [expenses, setExpenses] = useState<(Expense & { category?: ExpenseCategory; added_by_name?: string })[]>([]);
@@ -64,6 +65,16 @@ function ExpensesPageInner() {
   const [newExpenseCatName, setNewExpenseCatName] = useState("");
   const [addingExpenseCat, setAddingExpenseCat] = useState(false);
   const [reorderingCats, setReorderingCats] = useState(false);
+
+  const [editingExpense, setEditingExpense] = useState<(Expense & { category?: ExpenseCategory; added_by_name?: string }) | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editAmount, setEditAmount] = useState("");
+  const [editCategoryId, setEditCategoryId] = useState("");
+  const [editDate, setEditDate] = useState("");
+  const [editNotes, setEditNotes] = useState("");
+  const [editRecurring, setEditRecurring] = useState(false);
+  const [editRecurringInterval, setEditRecurringInterval] = useState("monthly");
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const supabase = createClient();
 
@@ -141,7 +152,7 @@ function ExpensesPageInner() {
   }
 
   async function saveEditExpenseCat(catId: string) {
-    if (!canMutate || !household || isPersonal) return;
+    if (!canMutate || !household) return;
     const name = editExpenseCatDraft.trim();
     if (!name) {
       alert("שם קטגוריה לא יכול להיות ריק.");
@@ -169,7 +180,7 @@ function ExpensesPageInner() {
   }
 
   async function addExpenseCategory() {
-    if (!canMutate || !household || isPersonal) return;
+    if (!canMutate || !household) return;
     const name = newExpenseCatName.trim();
     if (!name) return;
     if (categories.some((c) => c.name.trim() === name)) {
@@ -199,7 +210,7 @@ function ExpensesPageInner() {
   }
 
   async function removeExpenseCategory(cat: ExpenseCategory) {
-    if (!canMutate || !household || isPersonal) return;
+    if (!canMutate || !household) return;
     const { count, error: cntErr } = await supabase
       .from("expenses")
       .select("id", { count: "exact", head: true })
@@ -233,7 +244,7 @@ function ExpensesPageInner() {
   }
 
   async function persistCategoryOrder(reordered: ExpenseCategory[]) {
-    if (!household || isPersonal || !canMutate) return;
+    if (!household || !canMutate) return;
     const withOrder = reordered.map((c, i) => ({ ...c, sort_order: i + 1 }));
     setCategories(sortExpenseCategoriesForDisplay(withOrder));
     setReorderingCats(true);
@@ -304,6 +315,53 @@ function ExpensesPageInner() {
     if (!canMutate) return;
     await supabase.from("expenses").delete().eq("id", id);
     setExpenses((prev) => prev.filter((e) => e.id !== id));
+  }
+
+  function openEditExpense(expense: Expense & { category?: ExpenseCategory }) {
+    setEditingExpense(expense);
+    setEditTitle(expense.title);
+    setEditAmount(String(expense.amount));
+    setEditCategoryId(expense.category_id || "");
+    setEditDate(expense.date);
+    setEditNotes(expense.notes || "");
+    setEditRecurring(Boolean(expense.is_recurring));
+    setEditRecurringInterval(expense.recurring_interval || "monthly");
+  }
+
+  function closeEditExpense() {
+    setEditingExpense(null);
+  }
+
+  async function handleSaveExpenseEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!canMutate || !household || !editingExpense) return;
+    const amt = parseFloat(editAmount.replace(",", "."));
+    if (Number.isNaN(amt) || amt < 0) {
+      alert("סכום לא תקין.");
+      return;
+    }
+    setSavingEdit(true);
+    const { error } = await supabase
+      .from("expenses")
+      .update({
+        title: editTitle.trim(),
+        amount: amt,
+        category_id: editCategoryId || null,
+        date: editDate,
+        notes: editNotes.trim() || null,
+        is_recurring: editRecurring,
+        recurring_interval: editRecurring ? editRecurringInterval : null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", editingExpense.id)
+      .eq("household_id", household.id);
+    setSavingEdit(false);
+    if (error) {
+      alert(error.message || "לא ניתן לעדכן.");
+      return;
+    }
+    closeEditExpense();
+    loadData();
   }
 
   async function handleSaveBudget(e: React.FormEvent) {
@@ -405,6 +463,28 @@ function ExpensesPageInner() {
     pieAngle += (pct / 100) * 360;
     return { ...cat, pct, startAngle, endAngle: pieAngle };
   });
+
+  const expensesGrouped = useMemo(() => {
+    type E = (typeof expenses)[number];
+    const byCat = new Map<string, E[]>();
+    for (const ex of expenses) {
+      const key = ex.category_id || "__none__";
+      if (!byCat.has(key)) byCat.set(key, []);
+      byCat.get(key)!.push(ex);
+    }
+    const blocks: { label: string; color: string | null; items: E[] }[] = [];
+    for (const c of categoriesOrdered) {
+      const items = byCat.get(c.id);
+      if (items?.length) {
+        blocks.push({ label: c.name, color: c.color, items });
+      }
+    }
+    const unc = byCat.get("__none__");
+    if (unc?.length) {
+      blocks.push({ label: "ללא קטגוריה", color: "#737373", items: unc });
+    }
+    return blocks;
+  }, [expenses, categoriesOrdered]);
 
   function pieArc(startAngle: number, endAngle: number, r: number) {
     if (endAngle - startAngle >= 359.99) {
@@ -519,8 +599,8 @@ function ExpensesPageInner() {
         ))}
       </div>
 
-      {/* ניהול קטגוריות (משק בית בלבד) */}
-      {canMutate && !isPersonal && (
+      {/* ניהול קטגוריות */}
+      {canMutate && (
         <ExpenseCategoryManageSection
           categories={categoriesOrdered}
           editingExpenseCatId={editingExpenseCatId}
@@ -553,40 +633,69 @@ function ExpensesPageInner() {
           </p>
         </div>
       ) : (
-        <div className="space-y-2">
-          {expenses.map((expense) => (
-            <div
-              key={expense.id}
-              className="flex items-center justify-between rounded-xl border bg-surface p-4 transition-colors hover:bg-surface-dim"
-            >
-              <div className="flex items-center gap-3">
+        <div className="space-y-6">
+          {expensesGrouped.map((group) => (
+            <div key={group.label} className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2 border-b border-border pb-2">
                 <div
                   className="h-3 w-3 rounded-full"
-                  style={{ backgroundColor: expense.category?.color || "#737373" }}
+                  style={{ backgroundColor: group.color || "#737373" }}
                 />
-                <div>
-                  <p className="font-medium">{expense.title}</p>
-                  <p className="text-xs text-muted">
-                    {expense.category?.name || "ללא קטגוריה"} ·{" "}
-                    {new Date(expense.date).toLocaleDateString("he-IL")}
-                    {expense.is_recurring && " · חוזר"}
-                    {expense.added_by_name && ` · ${expense.added_by_name}`}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-lg font-bold">
-                  ₪{Number(expense.amount).toLocaleString()}
+                <h3 className="text-sm font-bold text-foreground">{group.label}</h3>
+                <span className="text-xs tabular-nums text-muted">
+                  סה״כ קטגוריה: ₪
+                  {group.items
+                    .reduce((s, x) => s + Number(x.amount), 0)
+                    .toLocaleString()}
                 </span>
-                {canMutate && (
-                  <button
-                    onClick={() => handleDelete(expense.id)}
-                    className="rounded-lg p-1.5 text-muted hover:bg-danger/10 hover:text-danger"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                )}
               </div>
+              {group.items.map((expense) => (
+                <div
+                  key={expense.id}
+                  className="flex items-center justify-between rounded-xl border bg-surface p-4 transition-colors hover:bg-surface-dim"
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="h-3 w-3 rounded-full"
+                      style={{ backgroundColor: expense.category?.color || "#737373" }}
+                    />
+                    <div>
+                      <p className="font-medium">{expense.title}</p>
+                      <p className="text-xs text-muted">
+                        {expense.category?.name || "ללא קטגוריה"} ·{" "}
+                        {new Date(expense.date).toLocaleDateString("he-IL")}
+                        {expense.is_recurring && " · חוזר"}
+                        {expense.added_by_name && ` · ${expense.added_by_name}`}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg font-bold tabular-nums">
+                      ₪{Number(expense.amount).toLocaleString()}
+                    </span>
+                    {canMutate && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => openEditExpense(expense)}
+                          className="rounded-lg p-1.5 text-muted hover:bg-primary/10 hover:text-primary"
+                          aria-label="עריכת הוצאה"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(expense.id)}
+                          className="rounded-lg p-1.5 text-muted hover:bg-danger/10 hover:text-danger"
+                          aria-label="מחיקת הוצאה"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           ))}
         </div>
@@ -889,6 +998,111 @@ function ExpensesPageInner() {
               >
                 {savingBudget && <Loader2 className="h-4 w-4 animate-spin" />}
                 {savingBudget ? "שומר..." : "שמירת תקציב"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {editingExpense && canMutate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-surface p-6 shadow-xl">
+            <div className="mb-5 flex items-center justify-between">
+              <h2 className="text-lg font-bold">עריכת הוצאה</h2>
+              <button
+                type="button"
+                onClick={closeEditExpense}
+                className="rounded-lg p-1.5 hover:bg-surface-dim"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <form onSubmit={handleSaveExpenseEdit} className="space-y-4">
+              <div>
+                <label className="mb-1.5 block text-sm font-medium">תיאור</label>
+                <input
+                  type="text"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  className="w-full rounded-xl border bg-background py-3 px-4 text-sm"
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium">סכום (₪)</label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={editAmount}
+                    onChange={(e) => setEditAmount(e.target.value)}
+                    className="w-full rounded-xl border bg-background py-3 px-4 text-sm"
+                    required
+                    dir="ltr"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium">תאריך</label>
+                  <input
+                    type="date"
+                    value={editDate}
+                    onChange={(e) => setEditDate(e.target.value)}
+                    className="w-full rounded-xl border bg-background py-3 px-4 text-sm"
+                    dir="ltr"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium">קטגוריה</label>
+                <select
+                  value={editCategoryId}
+                  onChange={(e) => setEditCategoryId(e.target.value)}
+                  className="w-full rounded-xl border bg-background py-3 px-4 text-sm"
+                >
+                  <option value="">ללא קטגוריה</option>
+                  {categoriesOrdered.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium">הערות</label>
+                <input
+                  type="text"
+                  value={editNotes}
+                  onChange={(e) => setEditNotes(e.target.value)}
+                  className="w-full rounded-xl border bg-background py-3 px-4 text-sm"
+                />
+              </div>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={editRecurring}
+                  onChange={(e) => setEditRecurring(e.target.checked)}
+                  className="h-4 w-4 rounded border-border accent-primary"
+                />
+                הוצאה חוזרת
+              </label>
+              {editRecurring && (
+                <select
+                  value={editRecurringInterval}
+                  onChange={(e) => setEditRecurringInterval(e.target.value)}
+                  className="w-full rounded-xl border bg-background py-3 px-4 text-sm"
+                >
+                  <option value="monthly">חודשי</option>
+                  <option value="quarterly">רבעוני</option>
+                  <option value="yearly">שנתי</option>
+                </select>
+              )}
+              <button
+                type="submit"
+                disabled={savingEdit}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-semibold text-white hover:bg-primary-dark disabled:opacity-60"
+              >
+                {savingEdit ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                {savingEdit ? "שומר..." : "שמירת שינויים"}
               </button>
             </form>
           </div>

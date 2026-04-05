@@ -204,6 +204,14 @@ export interface HouseholdNote {
 /** מעקב פעילות לפי זמן (לא פיננסים — יש מדור נפרד) */
 export type PersonalActivitySection = "studies" | "work" | "sport" | "health";
 
+/** שדות אופציונליים מספורט / שעון — נשמרים ב-metadata */
+export type PersonalActivityMetadata = {
+  distance_km?: number;
+  avg_heart_rate?: number;
+  calories?: number;
+  source?: "manual" | "watch_paste" | "watch_manual";
+};
+
 export interface PersonalActivityLog {
   id: string;
   household_id: string;
@@ -212,8 +220,20 @@ export interface PersonalActivityLog {
   occurred_at: string;
   duration_minutes: number | null;
   notes: string | null;
+  /** עמודה חדשה — אם חסרה ב-DB יוחזר undefined */
+  metadata?: PersonalActivityMetadata | Record<string, unknown> | null;
   created_by: string | null;
   created_at: string;
+}
+
+/** התאמת טקסטים ושדות בתצוגה — למשתמש במרחב אישי */
+export interface PersonalSectionSettingsRow {
+  id: string;
+  household_id: string;
+  user_id: string;
+  section: PersonalActivitySection;
+  settings: Record<string, unknown>;
+  updated_at: string;
 }
 
 export type FinanceCadence = "weekly" | "monthly" | "yearly";

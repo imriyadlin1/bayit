@@ -15,6 +15,7 @@ import {
   BarChart3,
 } from "lucide-react";
 import Link from "next/link";
+import { PersonalLifeOverview } from "@/components/me/personal-life-overview";
 
 interface MonthlyTotal {
   label: string;
@@ -317,6 +318,8 @@ export default function DashboardPage() {
             : "הנה סיכום מצב הבית שלכם"}
         </p>
       </div>
+
+      {isPersonal ? <PersonalLifeOverview /> : null}
 
       {/* Stats */}
       {stats.length > 0 && (

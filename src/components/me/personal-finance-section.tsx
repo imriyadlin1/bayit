@@ -123,6 +123,21 @@ export function PersonalFinanceSection() {
       .reduce((s, c) => s + monthlyEquivalent(Number(c.amount), c.cadence), 0);
   }, [visibleCommitments]);
 
+  const periodCoverage = useMemo(() => {
+    const active = commitments.filter((c) => c.active);
+    const total = active.length;
+    let paid = 0;
+    const unpaidNames: string[] = [];
+    for (const c of active) {
+      const key = financePeriodKey(c.cadence, new Date());
+      const done = payments.some((p) => p.commitment_id === c.id && p.period_key === key);
+      if (done) paid++;
+      else unpaidNames.push(c.name);
+    }
+    const pct = total === 0 ? 0 : Math.round((paid / total) * 100);
+    return { total, paid, unpaidNames, pct };
+  }, [commitments, payments]);
+
   function isPaidForCurrentPeriod(c: PersonalFinanceCommitment): boolean {
     const key = financePeriodKey(c.cadence, new Date());
     return payments.some((p) => p.commitment_id === c.id && p.period_key === key);
@@ -252,6 +267,44 @@ export function PersonalFinanceSection() {
           <p>{banner.text}</p>
         </div>
       )}
+
+      {!loading && periodCoverage.total > 0 ? (
+        <div
+          className={`rounded-2xl border p-4 ${
+            periodCoverage.paid === periodCoverage.total
+              ? "border-emerald-200 bg-emerald-50/80"
+              : "border-amber-200 bg-amber-50/50"
+          }`}
+        >
+          <p className="text-sm font-semibold text-foreground">סטטוס לתקופה הנוכחית</p>
+          <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">
+            {periodCoverage.paid}{" "}
+            <span className="text-base font-normal text-muted">מתוך</span>{" "}
+            {periodCoverage.total}{" "}
+            <span className="text-base font-normal text-muted">סומנו</span>
+          </p>
+          <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-background">
+            <div
+              className="h-full rounded-full bg-primary transition-[width] duration-300"
+              style={{ width: `${periodCoverage.pct}%` }}
+            />
+          </div>
+          <p className="mt-2 text-xs text-muted">
+            כל סעיף נמדד לפי התקופה שלו (חודש / שבוע / שנה) — זה סיכום מדיד על מה שכבר סימנת.
+          </p>
+          {periodCoverage.unpaidNames.length > 0 ? (
+            <p className="mt-2 text-sm text-foreground">
+              <span className="font-medium text-amber-900">עדיין בלי סימון: </span>
+              {periodCoverage.unpaidNames.slice(0, 5).join(" · ")}
+              {periodCoverage.unpaidNames.length > 5
+                ? ` · +${periodCoverage.unpaidNames.length - 5}`
+                : ""}
+            </p>
+          ) : (
+            <p className="mt-2 text-sm font-medium text-emerald-800">הכל מסומן לתקופה — אפשר לנשום.</p>
+          )}
+        </div>
+      ) : null}
 
       <div className="rounded-2xl border bg-surface p-4">
         <p className="text-sm font-semibold text-foreground">

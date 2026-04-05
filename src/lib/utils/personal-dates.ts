@@ -44,3 +44,15 @@ export function ymdCompare(a: string, b: string): number {
   if (a > b) return 1;
   return 0;
 }
+
+export function parseLocalYmd(s: string): Date {
+  const [y, m, d] = s.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+/** הזזת תאריך מקומי בימים (קלט ופלט YYYY-MM-DD) */
+export function addLocalDays(ymd: string, deltaDays: number): string {
+  const d = parseLocalYmd(ymd);
+  d.setDate(d.getDate() + deltaDays);
+  return localYmd(d);
+}
