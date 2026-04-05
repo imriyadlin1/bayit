@@ -14,6 +14,7 @@ import {
   ListChecks,
   Wrench,
   StickyNote,
+  BarChart3,
   Settings,
   Home,
   X,
@@ -35,6 +36,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { href: "/dashboard", label: "דשבורד", icon: LayoutDashboard },
   { href: "/expenses", label: "הוצאות", icon: Wallet, feature: "expenses" },
+  { href: "/expenses/trends", label: "מגמות הוצאות", icon: BarChart3, feature: "expenses" },
   { href: "/shopping", label: "קניות", icon: ShoppingCart, feature: "shopping" },
   { href: "/inventory", label: "מלאי", icon: Package, feature: "inventory" },
   { href: "/plants", label: "צמחים", icon: Sprout, feature: "plants" },

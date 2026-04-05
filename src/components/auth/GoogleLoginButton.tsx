@@ -12,16 +12,28 @@ export function GoogleLoginButton({ next = "/dashboard" }: Props) {
   const [loading, setLoading] = useState(false);
 
   async function handleClick() {
+    if (typeof window === "undefined") return;
     setLoading(true);
     const supabase = createClient();
-    const redirectTo =
-      typeof window !== "undefined"
-        ? `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`
-        : "";
-    await supabase.auth.signInWithOAuth({
+    const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`;
+    const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo },
     });
+    if (error) {
+      setLoading(false);
+      alert(
+        error.message ||
+          "לא ניתן להתחבר עם Google. ודאו ש־Redirect URLs ב-Supabase כוללים את כתובת האתר."
+      );
+      return;
+    }
+    if (data?.url) {
+      window.location.assign(data.url);
+      return;
+    }
+    setLoading(false);
+    alert("לא התקבלה כתובת להתחברות. נסו שוב או בדקו את הגדרות Google ב-Supabase.");
   }
 
   return (

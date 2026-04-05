@@ -337,21 +337,27 @@ export default function DashboardPage() {
 
       {/* Expense Trend Chart */}
       {see("expenses") && data.expenseTrend.some((m) => m.total > 0) && (
-        <div className="rounded-2xl border bg-surface p-5">
-          <div className="mb-4 flex items-center gap-2">
-            <BarChart3 className="h-5 w-5 text-muted" />
-            <h2 className="font-bold">מגמת הוצאות - 6 חודשים אחרונים</h2>
+        <Link
+          href="/expenses/trends"
+          className="block rounded-2xl border bg-surface p-5 transition-all hover:border-primary/30 hover:bg-primary/[0.03]"
+        >
+          <div className="mb-4 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <BarChart3 className="h-5 w-5 text-muted" />
+              <h2 className="font-bold">מגמת הוצאות - 6 חודשים אחרונים</h2>
+            </div>
+            <span className="text-xs font-medium text-primary">פירוט מלא ←</span>
           </div>
           {(() => {
             const max = Math.max(...data.expenseTrend.map((m) => m.total), 1);
             return (
-              <div className="flex items-end gap-3 h-44">
+              <div className="flex h-44 items-end gap-3">
                 {data.expenseTrend.map((m, i) => (
                   <div key={i} className="flex flex-1 flex-col items-center gap-1">
                     <span className="text-xs font-semibold text-muted">
                       {m.total > 0 ? `₪${m.total.toLocaleString()}` : ""}
                     </span>
-                    <div className="w-full flex justify-center" style={{ height: "120px" }}>
+                    <div className="flex w-full justify-center" style={{ height: "120px" }}>
                       <div
                         className="w-full max-w-[48px] rounded-t-lg bg-primary/80 transition-all"
                         style={{
@@ -366,7 +372,7 @@ export default function DashboardPage() {
               </div>
             );
           })()}
-        </div>
+        </Link>
       )}
 
       {/* Quick Actions - top on mobile */}
