@@ -1,12 +1,8 @@
 "use client";
 
-import { PersonalSectionPlaceholder } from "@/components/me/personal-section-placeholder";
+import { Briefcase } from "lucide-react";
+import { PersonalItemsBoard } from "@/components/me/personal-items-board";
 
 export default function MeWorkPage() {
-  return (
-    <PersonalSectionPlaceholder
-      title="עבודה"
-      description="מרחב לניהול משימות מקצועיות, פרויקטים או רזרבות — מלא לפי הצורך שלך."
-    />
-  );
+  return <PersonalItemsBoard section="work" icon={Briefcase} />;
 }

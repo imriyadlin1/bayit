@@ -1,12 +1,8 @@
 "use client";
 
-import { PersonalSectionPlaceholder } from "@/components/me/personal-section-placeholder";
+import { PiggyBank } from "lucide-react";
+import { PersonalItemsBoard } from "@/components/me/personal-items-board";
 
 export default function MeFinancePage() {
-  return (
-    <PersonalSectionPlaceholder
-      title="פיננסים אישיים"
-      description="תכנון, יעדים כספיים והפרדה מהוצאות המשק שב־«הוצאות». כאן רק המסגרת — בלי נתונים מוכנסים בשבילך."
-    />
-  );
+  return <PersonalItemsBoard section="finance" icon={PiggyBank} />;
 }

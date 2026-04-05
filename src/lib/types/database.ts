@@ -201,6 +201,29 @@ export interface HouseholdNote {
   updated_at: string;
 }
 
+/** מדורי פריטים אישיים (לא כולל יעדים — ראו personal_goals) */
+export type PersonalItemSection =
+  | "studies"
+  | "work"
+  | "sport"
+  | "finance"
+  | "health";
+
+export interface PersonalItem {
+  id: string;
+  household_id: string;
+  section: PersonalItemSection;
+  title: string;
+  description: string | null;
+  reminder_date: string | null;
+  completed: boolean;
+  completed_at: string | null;
+  sort_order: number;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 /** יעדים במרחב אישי בלבד (households.is_personal) */
 export interface PersonalGoal {
   id: string;

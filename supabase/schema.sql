@@ -280,6 +280,22 @@ CREATE TABLE personal_goals (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- פריטים אישיים לפי מדור (לימודים, עבודה, ספורט, פיננסים, בריאות)
+CREATE TABLE personal_items (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  household_id UUID NOT NULL REFERENCES households(id) ON DELETE CASCADE,
+  section TEXT NOT NULL CHECK (section IN ('studies', 'work', 'sport', 'finance', 'health')),
+  title TEXT NOT NULL,
+  description TEXT,
+  reminder_date DATE,
+  completed BOOLEAN NOT NULL DEFAULT FALSE,
+  completed_at TIMESTAMPTZ,
+  sort_order INT NOT NULL DEFAULT 0,
+  created_by UUID REFERENCES profiles(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- ===========================================
 -- Row Level Security (RLS)
 -- ===========================================
@@ -301,6 +317,7 @@ ALTER TABLE chore_completions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE maintenance_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE household_notes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE personal_goals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE personal_items ENABLE ROW LEVEL SECURITY;
 
 -- Helper: check if user is in a household
 CREATE OR REPLACE FUNCTION is_household_member(h_id UUID)
@@ -811,6 +828,31 @@ CREATE POLICY "personal_goals_delete" ON personal_goals
     AND is_personal_household(household_id)
   );
 
+CREATE POLICY "personal_items_select" ON personal_items
+  FOR SELECT USING (
+    is_household_member(household_id)
+    AND is_personal_household(household_id)
+  );
+CREATE POLICY "personal_items_insert" ON personal_items
+  FOR INSERT WITH CHECK (
+    is_household_member(household_id)
+    AND is_personal_household(household_id)
+    AND created_by = auth.uid()
+  );
+CREATE POLICY "personal_items_update" ON personal_items
+  FOR UPDATE USING (
+    is_household_member(household_id)
+    AND is_personal_household(household_id)
+  ) WITH CHECK (
+    is_household_member(household_id)
+    AND is_personal_household(household_id)
+  );
+CREATE POLICY "personal_items_delete" ON personal_items
+  FOR DELETE USING (
+    is_household_member(household_id)
+    AND is_personal_household(household_id)
+  );
+
 CREATE POLICY "expense_splits_select_perm" ON expense_splits
   FOR SELECT USING (
     EXISTS (
@@ -944,3 +986,4 @@ CREATE INDEX idx_maintenance_household ON maintenance_items(household_id);
 CREATE INDEX idx_maintenance_next_due ON maintenance_items(next_due);
 CREATE INDEX idx_household_notes_household ON household_notes(household_id);
 CREATE INDEX idx_personal_goals_household ON personal_goals(household_id);
+CREATE INDEX idx_personal_items_household_section ON personal_items(household_id, section);

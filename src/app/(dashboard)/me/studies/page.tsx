@@ -1,12 +1,8 @@
 "use client";
 
-import { PersonalSectionPlaceholder } from "@/components/me/personal-section-placeholder";
+import { BookOpen } from "lucide-react";
+import { PersonalItemsBoard } from "@/components/me/personal-items-board";
 
 export default function MeStudiesPage() {
-  return (
-    <PersonalSectionPlaceholder
-      title="לימודים"
-      description="כאן תוכל לארגן משימות לימודים, מבחנים וחומר — המבנה מוכן; התוכן הוא שלך."
-    />
-  );
+  return <PersonalItemsBoard section="studies" icon={BookOpen} />;
 }

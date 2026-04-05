@@ -1,12 +1,8 @@
 "use client";
 
-import { PersonalSectionPlaceholder } from "@/components/me/personal-section-placeholder";
+import { HeartPulse } from "lucide-react";
+import { PersonalItemsBoard } from "@/components/me/personal-items-board";
 
 export default function MeHealthPage() {
-  return (
-    <PersonalSectionPlaceholder
-      title="בריאות"
-      description="מעקב אישי לשינה, תזונה, בדיקות — תיעוד ויעדים שאתה מגדיר."
-    />
-  );
+  return <PersonalItemsBoard section="health" icon={HeartPulse} />;
 }

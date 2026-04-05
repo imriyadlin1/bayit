@@ -1,12 +1,8 @@
 "use client";
 
-import { PersonalSectionPlaceholder } from "@/components/me/personal-section-placeholder";
+import { Dumbbell } from "lucide-react";
+import { PersonalItemsBoard } from "@/components/me/personal-items-board";
 
 export default function MeSportPage() {
-  return (
-    <PersonalSectionPlaceholder
-      title="ספורט"
-      description="אימונים, תחרויות והכנה פיזית — השתמש במדור זה כרצף עבודה אישי."
-    />
-  );
+  return <PersonalItemsBoard section="sport" icon={Dumbbell} />;
 }

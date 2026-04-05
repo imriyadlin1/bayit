@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useHousehold } from "@/hooks/use-household";
 import { LoadingScreen } from "@/components/ui/loading";
+import { googleCalendarUrl } from "@/lib/utils/calendar";
 import type { PersonalGoal } from "@/lib/types/database";
-import { Plus, Trash2, Check, Loader2, X, Target } from "lucide-react";
+import { Plus, Trash2, Check, Loader2, X, Target, CalendarPlus } from "lucide-react";
 
 export default function MeGoalsPage() {
   const { household, userId, loading: hhLoading } = useHousehold();
@@ -86,7 +87,8 @@ export default function MeGoalsPage() {
           <div>
             <h1 className="text-2xl font-bold">יעדים</h1>
             <p className="text-sm text-muted">
-              יעדים אישיים במרחב שלך — לא קשור למשק הבית המשותף.
+              יעדים בינך לבין עצמך (קריירה, ספורט, לימודים גדולים). תאריך יעד
+              מאפשר לפתוח אירוע ביומן גוגל, כמו במטלות במשק.
             </p>
           </div>
         </div>
@@ -190,14 +192,33 @@ export default function MeGoalsPage() {
                     </p>
                   ) : null}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => removeGoal(g.id)}
-                  className="shrink-0 rounded-lg p-2 text-muted hover:bg-red-500/10 hover:text-red-600"
-                  aria-label="מחק"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
+                <div className="flex shrink-0 flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+                  <a
+                    href={googleCalendarUrl({
+                      title: `🎯 ${g.title}`,
+                      date:
+                        g.target_date ||
+                        new Date().toISOString().split("T")[0],
+                      details:
+                        g.description?.trim() ||
+                        "יעד מהמרחב האישי (בית)",
+                    })}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2 text-xs font-medium text-primary hover:bg-primary/10"
+                  >
+                    <CalendarPlus className="h-3.5 w-3.5" />
+                    ליומן גוגל
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => removeGoal(g.id)}
+                    className="rounded-lg p-2 text-muted hover:bg-red-500/10 hover:text-red-600"
+                    aria-label="מחק"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
             </li>
           ))}
