@@ -200,3 +200,18 @@ export interface HouseholdNote {
   created_at: string;
   updated_at: string;
 }
+
+/** יעדים במרחב אישי בלבד (households.is_personal) */
+export interface PersonalGoal {
+  id: string;
+  household_id: string;
+  title: string;
+  description: string | null;
+  target_date: string | null;
+  completed: boolean;
+  completed_at: string | null;
+  sort_order: number;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}

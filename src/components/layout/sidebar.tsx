@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useHouseholdPermissions } from "@/contexts/household-permissions-context";
+import { BAYIT_ACTIVE_SPACE_KEY } from "@/hooks/use-household";
 import {
   LayoutDashboard,
   Wallet,
@@ -23,6 +24,12 @@ import {
   ChevronDown,
   Plus,
   Loader2,
+  BookOpen,
+  Briefcase,
+  Dumbbell,
+  PiggyBank,
+  HeartPulse,
+  Target,
 } from "lucide-react";
 import type { FeatureKey, Household } from "@/lib/types/database";
 
@@ -33,7 +40,7 @@ interface NavItem {
   feature?: FeatureKey;
 }
 
-const navItems: NavItem[] = [
+const householdNavItems: NavItem[] = [
   { href: "/dashboard", label: "דשבורד", icon: LayoutDashboard },
   { href: "/expenses", label: "הוצאות", icon: Wallet, feature: "expenses" },
   { href: "/expenses/trends", label: "מגמות הוצאות", icon: BarChart3, feature: "expenses" },
@@ -45,6 +52,26 @@ const navItems: NavItem[] = [
   { href: "/notes", label: "לוח הודעות", icon: StickyNote, feature: "notes" },
   { href: "/settings", label: "הגדרות", icon: Settings },
 ];
+
+/** ניווט מרחב אישי — ללא קניות/מלאי/צמחים/תחזוקה/הודעות */
+const personalNavItems: NavItem[] = [
+  { href: "/dashboard", label: "דשבורד", icon: LayoutDashboard },
+  { href: "/expenses", label: "הוצאות", icon: Wallet, feature: "expenses" },
+  { href: "/expenses/trends", label: "מגמות הוצאות", icon: BarChart3, feature: "expenses" },
+  { href: "/chores", label: "מטלות", icon: ListChecks, feature: "chores" },
+  { href: "/me/studies", label: "לימודים", icon: BookOpen },
+  { href: "/me/work", label: "עבודה", icon: Briefcase },
+  { href: "/me/sport", label: "ספורט", icon: Dumbbell },
+  { href: "/me/finance", label: "פיננסים", icon: PiggyBank },
+  { href: "/me/health", label: "בריאות", icon: HeartPulse },
+  { href: "/me/goals", label: "יעדים", icon: Target },
+  { href: "/settings", label: "הגדרות", icon: Settings },
+];
+
+function isNavActive(pathname: string, href: string) {
+  if (href === "/dashboard") return pathname === "/dashboard";
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
 
 export function Sidebar({
   open,
@@ -100,18 +127,40 @@ export function Sidebar({
 
     const spaceName = `${profile?.full_name || "אישי"} - אישי`;
 
-    const { data } = await supabase.rpc("create_personal_space", {
+    const { data, error } = await supabase.rpc("create_personal_space", {
       space_name: spaceName,
     });
 
-    if (data) {
-      window.location.reload();
+    if (error) {
+      console.error(error);
+      setCreatingPersonal(false);
+      return;
     }
+
+    let newId: string | null = null;
+    if (typeof data === "string") {
+      try {
+        const parsed = JSON.parse(data) as { id?: string };
+        if (parsed?.id) newId = String(parsed.id);
+      } catch {
+        /* לא JSON */
+      }
+    } else if (data && typeof data === "object" && "id" in data) {
+      newId = String((data as { id: string }).id);
+    }
+
+    if (newId) {
+      localStorage.setItem(BAYIT_ACTIVE_SPACE_KEY, newId);
+      window.location.reload();
+      return;
+    }
+
     setCreatingPersonal(false);
   }
 
   const hasPersonalSpace = spaces.some((s) => s.is_personal);
-  const filteredNav = navItems.filter((item) => canSee(item.feature));
+  const baseNav = activeSpace?.is_personal ? personalNavItems : householdNavItems;
+  const filteredNav = baseNav.filter((item) => canSee(item.feature));
 
   return (
     <>
@@ -130,9 +179,7 @@ export function Sidebar({
         {/* Logo */}
         <div className="flex items-center justify-between border-b px-5 py-4">
           <Link href="/dashboard" className="flex items-center gap-2.5">
-            <div className={`flex h-9 w-9 items-center justify-center rounded-xl text-white ${
-              activeSpace?.is_personal ? "bg-indigo-500" : "bg-primary"
-            }`}>
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-white">
               {activeSpace?.is_personal ? <User className="h-5 w-5" /> : <Home className="h-5 w-5" />}
             </div>
             <span className="text-lg font-bold">
@@ -151,7 +198,7 @@ export function Sidebar({
         <nav className="flex-1 overflow-y-auto p-3">
           <ul className="space-y-1">
             {filteredNav.map((item) => {
-              const isActive = pathname === item.href;
+              const isActive = isNavActive(pathname, item.href);
               const Icon = item.icon;
               return (
                 <li key={item.href}>
@@ -199,9 +246,7 @@ export function Sidebar({
               className="flex w-full items-center justify-between rounded-xl bg-surface-dim p-3 transition-colors hover:bg-border"
             >
               <div className="flex items-center gap-2">
-                <div className={`flex h-7 w-7 items-center justify-center rounded-lg text-white ${
-                  activeSpace?.is_personal ? "bg-indigo-500" : "bg-primary"
-                }`}>
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-white">
                   {activeSpace?.is_personal ? <User className="h-3.5 w-3.5" /> : <Home className="h-3.5 w-3.5" />}
                 </div>
                 <div className="text-right">
@@ -232,9 +277,7 @@ export function Sidebar({
                         : "text-muted hover:bg-surface-dim"
                     }`}
                   >
-                    <div className={`flex h-7 w-7 items-center justify-center rounded-lg text-white ${
-                      space.is_personal ? "bg-indigo-500" : "bg-primary"
-                    }`}>
+                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-white">
                       {space.is_personal ? <User className="h-3.5 w-3.5" /> : <Home className="h-3.5 w-3.5" />}
                     </div>
                     <span className="truncate">{space.name}</span>
@@ -245,12 +288,12 @@ export function Sidebar({
                   <button
                     onClick={createPersonalSpace}
                     disabled={creatingPersonal}
-                    className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-indigo-500 transition-colors hover:bg-indigo-50"
+                    className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-primary transition-colors hover:bg-primary/10"
                   >
                     {creatingPersonal ? (
                       <Loader2 className="h-5 w-5 animate-spin" />
                     ) : (
-                      <div className="flex h-7 w-7 items-center justify-center rounded-lg border-2 border-dashed border-indigo-300">
+                      <div className="flex h-7 w-7 items-center justify-center rounded-lg border-2 border-dashed border-primary/40">
                         <Plus className="h-3.5 w-3.5" />
                       </div>
                     )}

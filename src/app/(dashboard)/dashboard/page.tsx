@@ -31,7 +31,7 @@ interface DashboardData {
 }
 
 export default function DashboardPage() {
-  const { household, userId, user, loading: hhLoading } = useHousehold();
+  const { household, userId, user, loading: hhLoading, isPersonal } = useHousehold();
   const { getLevel, canEdit, loading: permLoading, permRevision, permsSnapshot } = useHouseholdPermissions();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -45,7 +45,7 @@ export default function DashboardPage() {
       }
       await loadDashboard();
     })();
-  }, [household?.id, permLoading, permRevision, permsSnapshot]);
+  }, [Boolean(household?.is_personal), household?.id, permLoading, permRevision, permsSnapshot]);
 
   async function processRecurring() {
     if (!household || !userId) return;
@@ -152,7 +152,7 @@ export default function DashboardPage() {
       }
     }
 
-    if (see("shopping")) {
+    if (!household!.is_personal && see("shopping")) {
       const { data: shoppingRes } = await supabase
         .from("shopping_lists")
         .select("id")
@@ -169,7 +169,7 @@ export default function DashboardPage() {
       }
     }
 
-    if (see("plants")) {
+    if (!household!.is_personal && see("plants")) {
       const { data: plantsRes } = await supabase
         .from("plants")
         .select("id, name, location, last_watered, next_watering")
@@ -261,6 +261,7 @@ export default function DashboardPage() {
       icon: Wallet,
       color: "bg-indigo-100 text-indigo-600",
       href: "/expenses",
+      personalOk: true,
     },
     {
       feature: "chores" as FeatureKey,
@@ -269,6 +270,7 @@ export default function DashboardPage() {
       icon: ListChecks,
       color: "bg-amber-100 text-amber-600",
       href: "/chores",
+      personalOk: true,
     },
     {
       feature: "shopping" as FeatureKey,
@@ -277,6 +279,7 @@ export default function DashboardPage() {
       icon: ShoppingCart,
       color: "bg-emerald-100 text-emerald-600",
       href: "/shopping",
+      personalOk: false,
     },
     {
       feature: "plants" as FeatureKey,
@@ -285,17 +288,22 @@ export default function DashboardPage() {
       icon: Sprout,
       color: "bg-green-100 text-green-600",
       href: "/plants",
+      personalOk: false,
     },
   ];
-  const stats = statDefs.filter((s) => see(s.feature));
+  const stats = statDefs.filter(
+    (s) => see(s.feature) && (!isPersonal || s.personalOk),
+  );
 
   const quickDefs = [
-    { feature: "expenses" as FeatureKey, label: "הוצאה חדשה", href: "/expenses", icon: Wallet, color: "bg-indigo-100 text-indigo-600" },
-    { feature: "chores" as FeatureKey, label: "מטלה חדשה", href: "/chores", icon: ListChecks, color: "bg-amber-100 text-amber-600" },
-    { feature: "shopping" as FeatureKey, label: "פריט לקניות", href: "/shopping", icon: ShoppingCart, color: "bg-emerald-100 text-emerald-600" },
-    { feature: "plants" as FeatureKey, label: "צמח חדש", href: "/plants", icon: Sprout, color: "bg-green-100 text-green-600" },
+    { feature: "expenses" as FeatureKey, label: "הוצאה חדשה", href: "/expenses", icon: Wallet, color: "bg-indigo-100 text-indigo-600", personalOk: true },
+    { feature: "chores" as FeatureKey, label: "מטלה חדשה", href: "/chores", icon: ListChecks, color: "bg-amber-100 text-amber-600", personalOk: true },
+    { feature: "shopping" as FeatureKey, label: "פריט לקניות", href: "/shopping", icon: ShoppingCart, color: "bg-emerald-100 text-emerald-600", personalOk: false },
+    { feature: "plants" as FeatureKey, label: "צמח חדש", href: "/plants", icon: Sprout, color: "bg-green-100 text-green-600", personalOk: false },
   ];
-  const quickActions = quickDefs.filter((a) => see(a.feature) && canEdit(a.feature));
+  const quickActions = quickDefs.filter(
+    (a) => see(a.feature) && canEdit(a.feature) && (!isPersonal || a.personalOk),
+  );
 
   return (
     <div className="space-y-6">
@@ -303,13 +311,19 @@ export default function DashboardPage() {
         <h1 className="text-2xl font-bold">
           שלום{user?.full_name ? `, ${user.full_name}` : ""}! 👋
         </h1>
-        <p className="text-muted">הנה סיכום מצב הבית שלכם</p>
+        <p className="text-muted">
+          {isPersonal
+            ? "סיכום המרחב האישי שלך"
+            : "הנה סיכום מצב הבית שלכם"}
+        </p>
       </div>
 
       {/* Stats */}
       {stats.length > 0 && (
         <div className="rounded-2xl border bg-surface p-5">
-          <h2 className="mb-3 font-bold">סיכום מצב הבית</h2>
+          <h2 className="mb-3 font-bold">
+            {isPersonal ? "סיכום מהיר" : "סיכום מצב הבית"}
+          </h2>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             {stats.map((stat) => {
               const Icon = stat.icon;
@@ -469,7 +483,7 @@ export default function DashboardPage() {
         )}
 
         {/* Plants to Water */}
-        {see("plants") && (
+        {see("plants") && !isPersonal && (
         <div className="rounded-2xl border bg-surface p-5">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="font-bold">צמחים להשקות</h2>
